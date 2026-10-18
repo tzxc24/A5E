@@ -418,7 +418,8 @@ ApplicationWindow {
             anchors.fill: parent
             z: 3000
             color: "#FCFBFD"
-            visible: !window.startInSettings && !window.startInFiles && !window.startInMindustry
+            visible: Qt.application.arguments.indexOf("--skip-splash") < 0
+                     && !window.startInSettings && !window.startInFiles && !window.startInMindustry
             opacity: 1
 
             Column {

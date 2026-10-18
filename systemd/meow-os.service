@@ -17,6 +17,7 @@ User=radxa
 Group=radxa
 SupplementaryGroups=input video render audio i2c
 RuntimeDirectory=meow-os
+RuntimeDirectoryPreserve=yes
 Environment=XDG_RUNTIME_DIR=/run/meow-os
 EnvironmentFile=-/etc/meow-os/display.conf
 ExecStartPre=+/opt/meow-os/bin/meow-cpufreq-recover
@@ -26,7 +27,7 @@ ExecStartPre=+/opt/meow-os/bin/meow-display-preflight
 ExecStartPre=-+/usr/bin/plymouth quit --retain-splash
 ExecStartPre=+/usr/bin/python3 /opt/meow-os/vt_mode.py graphics
 ExecStart=/opt/meow-os/bin/meow-display-launcher
-ExecStopPost=+/usr/bin/python3 /opt/meow-os/vt_mode.py text
+ExecStopPost=+/usr/bin/python3 /opt/meow-os/vt_mode.py graphics
 Restart=always
 RestartSec=2
 SuccessExitStatus=1 SIGTERM

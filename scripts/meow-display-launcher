@@ -18,4 +18,12 @@ case "${QT_QPA_PLATFORM}" in
         ;;
 esac
 
+# systemd preserves this directory between desktop/game sessions; /run is
+# cleared on reboot, so a real boot still shows the introduction once.
+if [ -n "${XDG_RUNTIME_DIR:-}" ] && [ -d "$XDG_RUNTIME_DIR" ]; then
+    if [ -f "$XDG_RUNTIME_DIR/desktop-started" ]; then
+        exec /opt/meow-os/meow-os --skip-splash
+    fi
+    : > "$XDG_RUNTIME_DIR/desktop-started"
+fi
 exec /opt/meow-os/meow-os
