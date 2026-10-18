@@ -1,5 +1,7 @@
 [Unit]
 Description=PvZ-Portable game session for Meow OS
+Wants=meow-power.service
+After=meow-power.service
 Conflicts=meow-os.service meow-mindustry.service
 After=meow-os.service meow-mindustry.service systemd-user-sessions.service
 

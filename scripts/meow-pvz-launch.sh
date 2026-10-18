@@ -11,6 +11,7 @@ for tool in Xorg xrandr xinput xwininfo setpriv xset python3; do
     command -v "$tool" >/dev/null 2>&1 || { echo "Missing tool: $tool" >&2; exit 3; }
 done
 [ -r "$HELPER_DIR/meow-pvz-touch.py" ] || { echo 'Missing touch adapter' >&2; exit 3; }
+python3 "$HELPER_DIR/meow-power.py" --allow-game
 if [ "${1:-}" = --check ]; then echo PVZ_PREFLIGHT_OK; exit 0; fi
 [ "$(id -u)" = 0 ] || { echo 'Run through meow-pvz.service' >&2; exit 4; }
 

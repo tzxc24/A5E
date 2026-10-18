@@ -2,6 +2,8 @@
 Description=Meow OS Qt Quick shell
 After=systemd-modules-load.service systemd-udev-trigger.service
 Wants=meow-charge-enable.service
+Wants=meow-power.service
+After=meow-power.service
 Wants=meow-boot-log.service
 After=meow-boot-log.service
 Conflicts=getty@tty1.service

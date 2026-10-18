@@ -11,6 +11,8 @@ qrc_*.cpp
 *.img.xz
 out/
 .DS_Store
+__pycache__/
+*.py[cod]
 /meow-*.png
 /running-a5e.dts
 /verify/

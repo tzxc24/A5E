@@ -1,0 +1,13 @@
+{
+  "sample_interval_seconds": 2,
+  "warning_c": 75,
+  "throttle_c": 80,
+  "stop_games_c": 85,
+  "recover_c": 75,
+  "hot_hold_seconds": 4,
+  "cool_hold_seconds": 30,
+  "throttle_khz": 1008000,
+  "low_voltage_mv": 3400,
+  "low_voltage_hold_seconds": 10,
+  "battery_profile_verified": false
+}

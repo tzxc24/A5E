@@ -1,0 +1,30 @@
+[Unit]
+Description=Meow OS power telemetry and thermal supervisor
+After=local-fs.target systemd-modules-load.service systemd-udev-trigger.service
+Before=meow-os.service meow-pvz.service meow-mindustry.service
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 -B -u /opt/meow-os/bin/meow-power.py --config /etc/meow-os/power-management.json
+RuntimeDirectory=meow-power
+RuntimeDirectoryMode=0755
+StateDirectory=meow-power
+StateDirectoryMode=0700
+UMask=0022
+Restart=on-failure
+RestartSec=2s
+TimeoutStopSec=5s
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+RestrictAddressFamilies=AF_UNIX
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meow-power
+
+[Install]
+WantedBy=multi-user.target

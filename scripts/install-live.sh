@@ -119,6 +119,14 @@ sed 's/\r$//' config/meow-mindustry-sudoers > /tmp/meow-mindustry-sudoers && ins
 sed 's/\r$//' scripts/meow-pvz-launch.sh > /tmp/meow-pvz-launch.sh && install -m 0755 /tmp/meow-pvz-launch.sh /opt/meow-os/bin/meow-pvz-launch.sh
 install -m 0644 scripts/meow-pvz-keyboard.py /opt/meow-os/bin/meow-pvz-keyboard.py
 install -m 0644 scripts/meow-pvz-touch.py /opt/meow-os/bin/meow-pvz-touch.py
+install -m 0644 scripts/meow-power.py /opt/meow-os/bin/meow-power.py
+install -d -m 0755 /opt/meow-os/bin/meow_power
+install -m 0644 scripts/meow_power/*.py /opt/meow-os/bin/meow_power/
+install -m 0644 systemd/meow-power.service /etc/systemd/system/meow-power.service
+# Preserve reviewed thresholds if the user has already configured them.
+if [ ! -f /etc/meow-os/power-management.json ]; then
+    install -m 0644 config/power-management.json /etc/meow-os/power-management.json
+fi
 install -d -m 0755 /etc/systemd/system/meow-os.service.d
 install -m 0644 systemd/meow-os-native-games.conf /etc/systemd/system/meow-os.service.d/90-native-games.conf
 sed 's/\r$//' systemd/meow-pvz.service > /tmp/meow-pvz.service && install -m 0644 /tmp/meow-pvz.service /etc/systemd/system/meow-pvz.service
@@ -159,6 +167,9 @@ systemctl restart systemd-journald.service
 journalctl --flush || true
 udevadm control --reload-rules
 systemctl enable meow-os.service
+systemctl enable meow-power.service
+# Upgrades must replace the running Python code, not just the files on disk.
+systemctl restart meow-power.service
 systemctl enable meow-boot-log.service
 if systemctl list-unit-files systemd-pstore.service >/dev/null 2>&1; then
     systemctl enable systemd-pstore.service || true

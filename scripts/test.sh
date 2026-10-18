@@ -130,9 +130,11 @@ grep -q 'cpuFrequencies' src/systembackend.h
 grep -q 'maximumFlickVelocity' qml/components/SettingsFlickable.qml
 grep -q 'pressDelay: 90' qml/components/SettingsFlickable.qml
 grep -q 'stack.depth > 1' qml/Main.qml
-grep -q 'inputLimit2400mA = 0x17' src/systembackend.cpp
-grep -q 'chargeCurrent2400mA = 0x28' src/systembackend.cpp
-grep -q 'reg05 & 0xcf' src/systembackend.cpp
+! grep -q 'configureSgm41511ChargeCurrent' src/systembackend.cpp
+test -f scripts/meow-power.py
+test -f systemd/meow-power.service
+grep -q 'meow-power.service' systemd/meow-pvz.service
+grep -q -- '--allow-game' scripts/meow-pvz-launch.sh
 grep -q 'zap-green.svg' qml.qrc
 grep -q 'visible: !systemBackend.batteryCharging' qml/apps/SettingsApp.qml
 grep -q 'readonly property bool settingsForeground' qml/Main.qml

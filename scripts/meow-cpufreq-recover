@@ -7,6 +7,27 @@ boost_state=/var/lib/meow-os/cpufreq-boost.state
 boost_initialized=/var/lib/meow-os/cpufreq-boost-initialized
 restored=0
 
+# The independent supervisor owns all maximum-frequency limits now. Never
+# replay legacy sleep ceilings behind an active thermal protection latch.
+if [ -r /opt/meow-os/bin/meow-power.py ]; then
+    if [ -s "$boost_state" ]; then
+        while IFS="$(printf '\t')" read -r path value; do
+            case "$path" in
+                /sys/devices/system/cpu/cpufreq/policy*/scaling_min_freq) ;;
+                *) continue ;;
+            esac
+            case "$value" in ''|*[!0-9]*) continue ;; esac
+            current=$(cat "$path" 2>/dev/null || true)
+            case "$current" in ''|*[!0-9]*) continue ;; esac
+            if [ -w "$path" ] && [ "$value" -lt "$current" ]; then
+                printf '%s\n' "$value" > "$path"
+            fi
+        done < "$boost_state"
+    fi
+    echo 'MeowOS: CPU ceilings are managed by meow-power.service'
+    exit 0
+fi
+
 if [ -s "$state" ]; then
     while IFS="$(printf '\t')" read -r path value; do
         case "$path" in

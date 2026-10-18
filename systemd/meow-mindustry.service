@@ -1,11 +1,14 @@
 [Unit]
 Description=Mindustry game session for Meow OS
+Wants=meow-power.service
+After=meow-power.service
 Conflicts=meow-os.service
 After=systemd-user-sessions.service
 OnFailure=meow-diagnostic-capture@%n.service
 
 [Service]
 Type=simple
+ExecStartPre=/usr/bin/python3 /opt/meow-os/bin/meow-power.py --allow-game
 # Stop the DRM/EGLFS desktop before taking DRM master for the X11 game.
 # Conflicts alone is not sufficient when the desktop was started manually or
 # by a separate transaction; make the hand-off explicit and deterministic.
