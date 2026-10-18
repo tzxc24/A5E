@@ -29,6 +29,7 @@ class CpuLimiter:
         self.cooldown=False
         self.throttled=False
         self.restriction_reason='none'
+        self._saved_payload=None
         if self.path.exists():
             if not root_owned(self.path): raise ValueError('CPU 状态文件必须由 root 所有且不可由其他用户写入')
             state=json.loads(self.path.read_text(encoding='utf-8'))
@@ -42,8 +43,14 @@ class CpuLimiter:
                                 (bool(self.records) and self.restriction_reason != 'sleep'))
 
     def save(self):
-        atomic_json(self.path,dict(bootId=self.boot,limits=self.records,cooldown=self.cooldown,
-                                  throttled=self.throttled,restrictionReason=self.restriction_reason),0o600)
+        state=dict(bootId=self.boot,limits=self.records,cooldown=self.cooldown,
+                   throttled=self.throttled,restrictionReason=self.restriction_reason)
+        # Serialize to detach the cached value from mutable nested records. Cache
+        # only a successful commit, so failed writes are retried on the next poll.
+        payload=json.dumps(state,sort_keys=True,allow_nan=False)
+        if payload == self._saved_payload and self.path.exists(): return
+        atomic_json(self.path,state,0o600)
+        self._saved_payload=payload
 
     def limit(self, cap):
         errors=[]
@@ -61,6 +68,8 @@ class CpuLimiter:
                 if key in self.records:
                     record=self.records[key]
                     target=min(cap,record['original'])
+                    if current == target == record['applied'] and 'pending' not in record:
+                        continue
                     record['pending']=target
                     self.save()  # Journal ownership before changing hardware.
                     if current != target: path.write_text(str(target))

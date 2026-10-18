@@ -1,4 +1,5 @@
 import sys
+sys.dont_write_bytecode=True
 import unittest
 import tempfile
 from pathlib import Path
@@ -6,6 +7,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 tempfile.tempdir=str(Path(__file__).resolve().parents[1] / 'tmp')
 
 class HardwareTests(unittest.TestCase):
+    def test_failed_state_commit_is_not_cached(self):
+        from unittest.mock import patch
+        from meow_power.hardware import CpuLimiter, atomic_json
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            limiter=CpuLimiter(root,root/'limits.json','boot')
+            with patch('meow_power.hardware.atomic_json',side_effect=OSError('disk failure')):
+                with self.assertRaises(OSError): limiter.save()
+            with patch('meow_power.hardware.atomic_json',wraps=atomic_json) as write:
+                limiter.save()
+                write.assert_called_once()
+
+    def test_unchanged_normal_and_held_cap_do_not_rewrite_persistent_state(self):
+        from unittest.mock import patch
+        from meow_power.hardware import CpuLimiter, atomic_json
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            cpu=root/'devices/system/cpu/cpufreq/policy0'
+            cpu.mkdir(parents=True)
+            (cpu/'scaling_max_freq').write_text('1800000')
+            state=root/'limits.json'
+            limiter=CpuLimiter(root,state,'boot')
+            with patch('meow_power.hardware.atomic_json',wraps=atomic_json) as write:
+                limiter.save()
+                initial=write.call_count
+                for _ in range(10): limiter.save()
+                self.assertEqual(write.call_count,initial)
+                limiter.throttled=True
+                limiter.limit(1008000)
+                capped=write.call_count
+                for _ in range(10):
+                    limiter.save()
+                    limiter.limit(1008000)
+                self.assertEqual(write.call_count,capped)
+                state.unlink()
+                limiter.save()
+                self.assertEqual(write.call_count,capped+1)
+
     def test_inconsistent_persisted_cooldown_is_thermal_latch(self):
         import json
         from meow_power.hardware import CpuLimiter
