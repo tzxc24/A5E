@@ -119,6 +119,8 @@ sed 's/\r$//' config/meow-mindustry-sudoers > /tmp/meow-mindustry-sudoers && ins
 sed 's/\r$//' scripts/meow-pvz-launch.sh > /tmp/meow-pvz-launch.sh && install -m 0755 /tmp/meow-pvz-launch.sh /opt/meow-os/bin/meow-pvz-launch.sh
 install -m 0644 scripts/meow-pvz-keyboard.py /opt/meow-os/bin/meow-pvz-keyboard.py
 install -m 0644 scripts/meow-pvz-touch.py /opt/meow-os/bin/meow-pvz-touch.py
+install -d -m 0755 /etc/systemd/system/meow-os.service.d
+install -m 0644 systemd/meow-os-native-games.conf /etc/systemd/system/meow-os.service.d/90-native-games.conf
 sed 's/\r$//' systemd/meow-pvz.service > /tmp/meow-pvz.service && install -m 0644 /tmp/meow-pvz.service /etc/systemd/system/meow-pvz.service
 sed 's/\r$//' config/meow-pvz-sudoers > /tmp/meow-pvz-sudoers && visudo -cf /tmp/meow-pvz-sudoers && install -m 0440 /tmp/meow-pvz-sudoers /etc/sudoers.d/meow-pvz
 sed 's/\r$//' systemd/meow-boot-log.service > /tmp/meow-boot-log.service && install -m 0644 /tmp/meow-boot-log.service /etc/systemd/system/meow-boot-log.service

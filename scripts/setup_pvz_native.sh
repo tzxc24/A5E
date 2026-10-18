@@ -15,7 +15,7 @@ sudo apt-get install -y cmake build-essential ninja-build \
     xserver-xorg-core xserver-xorg-video-modesetting xserver-xorg-input-libinput \
     x11-xserver-utils x11-utils xinput onboard
 
-echo "[2/4] 克隆并编译 PvZ-Portable 官方原版逆向开源引擎..."
+echo "[2/4] 克隆并编译 PvZ-Portable 社区开源重实现引擎..."
 mkdir -p "${GAMES_DIR}"
 cd "${GAMES_DIR}"
 if [ ! -d "PvZ-Portable" ]; then
@@ -34,9 +34,7 @@ echo "[3/4] 组织游戏资源与自动存档目录..."
 mkdir -p "${PVZ_DIR}/userdata"
 test -x "${GAMES_DIR}/PvZ-Portable/build/pvz-portable"
 install -m 0755 "${GAMES_DIR}/PvZ-Portable/build/pvz-portable" "${PVZ_DIR}/pvz-portable"
-if [ -d "${GAMES_DIR}/PvZ-Portable/properties" ]; then
-    cp -r "${GAMES_DIR}/PvZ-Portable/properties" "${PVZ_DIR}/"
-fi
+# Existing game assets and saves are owned by the user and kept intact.
 
 echo "[4/4] 生成 MeowOS 启动与退出自动保存包装脚本..."
 cat << 'EOF' > "${PVZ_DIR}/run.sh"
