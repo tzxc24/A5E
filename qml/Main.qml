@@ -1068,14 +1068,13 @@ ApplicationWindow {
         parent: scene; z: 2049
         visible: systemBackend.powerManagement.fresh !== true
                  || systemBackend.powerManagement.status !== "normal" || systemBackend.powerManagement.lowBattery === true
-                 || (systemBackend.powerManagement.lastEvent || "").length > 0
         anchors { left: parent.left; right: parent.right; top: parent.top; leftMargin: 24; rightMargin: 24; topMargin: window.statusBarHeight + 10 }
         height: powerAlert.implicitHeight + 24; radius: 16; color: "#FFF1DC"; border.color: "#F0C782"
         Text {
             id: powerAlert; anchors.fill: parent; anchors.margins: 12
             text: (systemBackend.powerManagement.fresh !== true
                    ? (systemBackend.powerManagement.error || "电源后台状态未知，等待新鲜快照")
-                   : (systemBackend.powerManagement.lastEvent || systemBackend.powerManagement.message || "电源保护提示"))
+                   : (systemBackend.powerManagement.message || "电源保护提示"))
                   + (systemBackend.powerManagement.lowBattery === true ? " · 电池电量偏低，请及时连接电源" : "")
             wrapMode: Text.WordWrap; color: "#925515"; font.family: window.uiFont; font.pixelSize: 16
         }
