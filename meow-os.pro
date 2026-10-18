@@ -8,7 +8,7 @@ SOURCES += src/main.cpp src/systembackend.cpp \
     src/runtime/app_session.cpp \
     src/runtime/app_session_supervisor.cpp \
     src/runtime/runtime_snapshot.cpp
-HEADERS += src/systembackend.h src/version.h \
+HEADERS += src/systembackend.h src/power_snapshot_reader.h src/version.h \
     src/runtime/task_scheduler.h \
     src/runtime/app_session.h \
     src/runtime/app_session_supervisor.h \

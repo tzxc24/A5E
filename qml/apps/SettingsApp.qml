@@ -785,141 +785,51 @@ Rectangle {
                         emphasize: true
                     }
                     IosInfoRow { height: 50; label: "当前电压"; value: systemBackend.batteryVoltageMv >= 0 ? (systemBackend.batteryVoltageMv / 1000).toFixed(3) + " V" : "--" }
-                    IosInfoRow { height: 50; label: "当前电流"; value: systemBackend.batteryAvailable ? systemBackend.batteryCurrentMa + " mA" : "--" }
-                    IosInfoRow { height: 50; label: "外部电源"; value: systemBackend.chargerAvailable ? (systemBackend.externalPowerPresent ? "已接入" : "未接入") : "--" }
-                    IosInfoRow { height: 50; label: "电芯温度"; value: systemBackend.batteryTemperatureC > -100 ? systemBackend.batteryTemperatureC.toFixed(1) + " °C" : "--"; last: true }
+                    IosInfoRow { height: 50; label: "当前电流"; value: systemBackend.powerManagement.currentValid ? systemBackend.batteryCurrentMa + " mA" : "--" }
+                    IosInfoRow { height: 50; label: "外部电源"; value: systemBackend.powerManagement.externalPowerKnown ? (systemBackend.externalPowerPresent ? "已接入" : "未接入") : "--" }
+                    IosInfoRow { height: 50; label: "电量计内部温度"; value: systemBackend.batteryTemperatureC > -100 ? systemBackend.batteryTemperatureC.toFixed(1) + " °C" : "--"; last: true }
                 }
 
-                // 1. Two-point Safe Calibration Status Card
                 Rectangle {
-                    width: parent.width; height: 110; radius: 18
-                    color: "#F6F5FC"; border.color: "#E2DFF0"; border.width: 1
-                    Column {
-                        anchors.fill: parent; anchors.margins: 16; spacing: 10
-                        RowLayout {
-                            width: parent.width
-                            ColumnLayout {
-                                Layout.fillWidth: true; spacing: 2
-                                Text { text: "两点安全校准与基准"; color: "#27222D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 17; font.weight: Font.DemiBold }
-                                Text {
-                                    text: systemBackend.batteryCalibrationSummary.length
-                                          ? systemBackend.batteryCalibrationSummary
-                                          : "当前采用 1S 4.2V (10000 mAh) 额定设计基准"
-                                    color: "#77717D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13
-                                    elide: Text.ElideRight; Layout.fillWidth: true
-                                }
-                            }
-                            Rectangle {
-                                Layout.preferredWidth: 84; Layout.preferredHeight: 30; radius: 9
-                                color: systemBackend.batteryCalibrationStatus.indexOf("已") >= 0 ? "#EAF9F3" : "#FEF6E9"
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: systemBackend.batteryCalibrationStatus
-                                    color: systemBackend.batteryCalibrationStatus.indexOf("已") >= 0 ? "#10B981" : "#D97706"
-                                    font.family: "Noto Sans CJK SC"; font.pixelSize: 12; font.weight: Font.DemiBold
-                                }
-                            }
-                        }
-                        Row {
-                            spacing: 10
-                            Rectangle {
-                                width: 120; height: 34; radius: 10
-                                color: calBtn.pressed ? "#5345C5" : "#6555D5"
-                                Text { anchors.centerIn: parent; text: "两点安全标定"; color: "white"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                MouseArea { id: calBtn; anchors.fill: parent; onClicked: calDialog.opened = true }
-                            }
-                            Rectangle {
-                                visible: systemBackend.batteryCalibrationRollbackAvailable
-                                width: 90; height: 34; radius: 10
-                                color: rollbackBtn.pressed ? "#DDD7F5" : "#ECE8F9"
-                                Text { anchors.centerIn: parent; text: "回滚配置"; color: "#5648C8"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                MouseArea { id: rollbackBtn; anchors.fill: parent; onClicked: systemBackend.rollbackBatteryCalibration() }
-                            }
-                            Rectangle {
-                                width: 80; height: 34; radius: 10
-                                color: resetBtn.pressed ? "#FBDADE" : "#FEEBED"
-                                Text { anchors.centerIn: parent; text: "重置默认"; color: "#D93829"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                MouseArea { id: resetBtn; anchors.fill: parent; onClicked: systemBackend.clearBatteryCalibration() }
-                            }
-                        }
+                    width: parent.width; height: powerNotice.implicitHeight + 32; radius: 18
+                    color: "#FEF6E9"; border.color: "#F4DCAE"
+                    Text {
+                        id: powerNotice; anchors.fill: parent; anchors.margins: 16
+                        text: (systemBackend.powerManagement.message || "等待电源后台服务")
+                              + "\n电量百分比为电量计估算；实际电池容量与配置尚未核实。"
+                        wrapMode: Text.WordWrap; color: "#98651B"; font.family: window.uiFont; font.pixelSize: 14
                     }
                 }
-
-                // 2. Fuel Gauge Telemetry (BQ27220)
                 IosGroup {
                     width: parent.width
-                    IosInfoRow { height: 50; label: "电量计芯片遥测"; value: systemBackend.gaugeCommunication ? "BQ27220 在线 (I²C 0x55)" : systemBackend.gaugeError; emphasize: true }
-                    IosInfoRow { height: 50; label: "标定后电压"; value: systemBackend.batteryVoltageMv >= 0 ? (systemBackend.batteryVoltageMv / 1000).toFixed(3) + " V (原始: " + systemBackend.batteryRawVoltageMv + " mV)" : "--" }
-                    IosInfoRow { height: 50; label: "标定后电流"; value: systemBackend.batteryAvailable ? systemBackend.batteryCurrentMa + " mA (原始: " + systemBackend.batteryRawCurrentMa + " mA)" : "--" }
-                    IosInfoRow { height: 50; label: "额定设计容量"; value: systemBackend.batteryDesignCapacityMah + " mAh (1S 4.2V)" }
-                    IosInfoRow { height: 50; label: "剩余容量估算"; value: systemBackend.batteryRemainingMah >= 0 ? systemBackend.batteryRemainingMah + " mAh" : "--" }
-                    IosInfoRow { height: 50; label: "满充容量统计"; value: systemBackend.batteryFullChargeMah >= 0 ? systemBackend.batteryFullChargeMah + " mAh" : "--" }
-                    IosInfoRow { height: 50; label: "电芯表面温度"; value: systemBackend.batteryTemperatureC > -100 ? systemBackend.batteryTemperatureC.toFixed(1) + " °C" : "--"; last: true }
+                    IosInfoRow { height: 50; label: "后台保护"; value: systemBackend.powerManagement.fresh ? (systemBackend.powerManagement.status || "未知") : "快照无效 / 服务离线"; emphasize: true }
+                    IosInfoRow { height: 50; label: "采样年龄"; value: systemBackend.powerManagement.fresh ? systemBackend.powerManagement.sampleAgeSeconds.toFixed(1) + " 秒" : "--" }
+                    IosInfoRow { height: 50; label: "电量估算可信度"; value: systemBackend.powerManagement.socConfidence === "inconsistent" ? "读数不一致" : (systemBackend.powerManagement.socConfidence === "unverified" ? "容量配置未核实" : "不可用") }
+                    IosInfoRow { height: 50; label: "板载温控温度"; value: systemBackend.powerManagement.boardTemperatureC > -100 ? systemBackend.powerManagement.boardTemperatureC.toFixed(1) + " °C" : "--" }
+                    IosInfoRow { height: 50; label: "温度来源"; value: systemBackend.powerManagement.temperatureSource || "未知"; last: true }
                 }
-
-                // 3. Charger & Path Management Telemetry (SGM41511)
                 IosGroup {
                     width: parent.width
-                    IosInfoRow { height: 50; label: "充电与路径管理"; value: systemBackend.chargerAvailable ? "SGM41511 在线 (I²C 0x6b)" : "未检测到充电芯片"; emphasize: true }
-                    IosInfoRow { height: 50; label: "输入限流设定"; value: systemBackend.chargerInputLimitMa + " mA (USB 2.4A 解锁)" }
-                    IosInfoRow { height: 50; label: "快充充电电流"; value: systemBackend.chargerFastCurrentMa + " mA (最高 2.4A)" }
-                    IosInfoRow { height: 50; label: "供电路径模式"; value: systemBackend.chargerAvailable ? (systemBackend.externalPowerPresent ? "VBUS 有效 (NVDC 动态电源路径)" : "电池独立放电模式") : "--" }
-                    IosInfoRow { height: 50; label: "NTC 温控保护"; value: window.temperatureZoneText(systemBackend.chargeTemperatureZone) + " (JEITA 硬件安全规范)"; last: true }
+                    IosInfoRow { height: 50; label: "电量计通信"; value: systemBackend.gaugeCommunication ? "BQ27220 在线 · 只读" : systemBackend.gaugeError; emphasize: true }
+                    IosInfoRow { height: 50; label: "原始电压"; value: systemBackend.powerManagement.voltageValid ? systemBackend.batteryRawVoltageMv + " mV" : "--" }
+                    IosInfoRow { height: 50; label: "原始电流"; value: systemBackend.powerManagement.currentValid ? systemBackend.batteryRawCurrentMa + " mA" : "--" }
+                    IosInfoRow { height: 50; label: "剩余容量 RM"; value: systemBackend.batteryRemainingMah >= 0 ? systemBackend.batteryRemainingMah + " mAh" : "--" }
+                    IosInfoRow { height: 50; label: "满充配置 FCC"; value: systemBackend.batteryFullChargeMah >= 0 ? systemBackend.batteryFullChargeMah + " mAh" : "--" }
+                    IosInfoRow { height: 50; label: "电量计设计容量配置"; value: systemBackend.batteryDesignCapacityMah >= 0 ? systemBackend.batteryDesignCapacityMah + " mAh · 未核实" : "未知"; last: true }
                 }
-
-                // 4. Capacity Learning Wizard Card
+                IosGroup {
+                    width: parent.width
+                    IosInfoRow { height: 50; label: "充电器遥测"; value: systemBackend.chargerAvailable ? "SGM41511 在线 · 只读" : "未知"; emphasize: true }
+                    IosInfoRow { height: 50; label: "输入限流寄存器"; value: systemBackend.chargerInputLimitMa >= 0 ? systemBackend.chargerInputLimitMa + " mA" : "--" }
+                    IosInfoRow { height: 50; label: "充电电流寄存器"; value: systemBackend.chargerFastCurrentMa >= 0 ? systemBackend.chargerFastCurrentMa + " mA" : "--" }
+                    IosInfoRow { height: 50; label: "充电 NTC 状态"; value: window.temperatureZoneText(systemBackend.chargeTemperatureZone); last: true }
+                }
                 Rectangle {
-                    width: parent.width; height: 104; radius: 18
-                    color: "#F0F9FF"; border.color: "#CCE8FD"; border.width: 1
-                    Column {
-                        anchors.fill: parent; anchors.margins: 16; spacing: 8
-                        RowLayout {
-                            width: parent.width
-                            ColumnLayout {
-                                Layout.fillWidth: true; spacing: 2
-                                Text {
-                                    text: systemBackend.batteryCapacityLearningStep > 0
-                                          ? "10000 mAh 容量学习中 (步骤 " + systemBackend.batteryCapacityLearningStep + "/4)"
-                                          : "10000 mAh 容量学习向导"
-                                    color: "#0369A1"; font.family: "Noto Sans CJK SC"; font.pixelSize: 16; font.weight: Font.Bold
-                                }
-                                Text {
-                                    text: systemBackend.batteryCapacityLearningStep > 0
-                                          ? systemBackend.batteryCapacityLearningStatus
-                                          : "按照标准充满-静置-受控放电-复充流程，由电量计固件收敛实际可用容量"
-                                    color: "#475569"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13
-                                    elide: Text.ElideRight; Layout.fillWidth: true
-                                }
-                            }
-                            Row {
-                                spacing: 8
-                                Rectangle {
-                                    visible: systemBackend.batteryCapacityLearningStep > 0
-                                    width: 72; height: 32; radius: 8; color: "#E2E8F0"
-                                    Text { anchors.centerIn: parent; text: "取消"; color: "#475569"; font.family: "Noto Sans CJK SC"; font.pixelSize: 12; font.weight: Font.DemiBold }
-                                    MouseArea { anchors.fill: parent; onClicked: systemBackend.cancelCapacityLearning() }
-                                }
-                                Rectangle {
-                                    width: systemBackend.batteryCapacityLearningStep > 0 ? 84 : 100
-                                    height: 32; radius: 8
-                                    color: learnBtn.pressed ? "#0284C7" : "#0EA5E9"
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: systemBackend.batteryCapacityLearningStep > 0 ? "进入下一步" : "启动向导"
-                                        color: "white"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13; font.weight: Font.DemiBold
-                                    }
-                                    MouseArea {
-                                        id: learnBtn; anchors.fill: parent
-                                        onClicked: {
-                                            if (systemBackend.batteryCapacityLearningStep > 0)
-                                                systemBackend.advanceCapacityLearning()
-                                            else
-                                                systemBackend.startCapacityLearning()
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    width: parent.width; height: eventText.implicitHeight + 32; radius: 18; color: "#F6F5FC"
+                    Text {
+                        id: eventText; anchors.fill: parent; anchors.margins: 16
+                        text: "后台事件\n" + ((systemBackend.powerManagement.events || []).join("\n") || "暂无事件")
+                        wrapMode: Text.WordWrap; color: "#655B76"; font.family: window.uiFont; font.pixelSize: 14
                     }
                 }
             }
@@ -1512,7 +1422,4 @@ Rectangle {
         }
     }
 
-    BatteryCalibrationDialog {
-        id: calDialog
-    }
 }

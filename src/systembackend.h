@@ -59,6 +59,7 @@ class SystemBackend final : public QObject
     Q_PROPERTY(QVariantList ethernetPorts READ ethernetPorts NOTIFY ethernetChanged)
     Q_PROPERTY(bool ethernetOperating READ ethernetOperating NOTIFY ethernetChanged)
     Q_PROPERTY(QString ethernetOperationInterface READ ethernetOperationInterface NOTIFY ethernetChanged)
+    Q_PROPERTY(QVariantMap powerManagement READ powerManagement NOTIFY powerChanged)
     Q_PROPERTY(bool batteryAvailable READ batteryAvailable NOTIFY powerChanged)
     Q_PROPERTY(int batteryPercent READ batteryPercent NOTIFY powerChanged)
     Q_PROPERTY(QString batteryStatus READ batteryStatus NOTIFY powerChanged)
@@ -166,6 +167,7 @@ public:
     QVariantList ethernetPorts() const;
     bool ethernetOperating() const;
     QString ethernetOperationInterface() const;
+    QVariantMap powerManagement() const { return m_powerManagement; }
     bool batteryAvailable() const;
     int batteryPercent() const;
     QString batteryStatus() const;
@@ -260,7 +262,7 @@ public:
     Q_INVOKABLE void setScreenSleeping(bool sleeping);
     Q_INVOKABLE void wakeScreen();
     Q_INVOKABLE bool calibrateBattery(int referenceVoltageMv, int referenceCurrentMa,
-                                      int designCapacityMah = 10000, bool stable = true);
+                                      int designCapacityMah = -1, bool stable = true);
     Q_INVOKABLE bool rollbackBatteryCalibration();
     Q_INVOKABLE void startCapacityLearning();
     Q_INVOKABLE void advanceCapacityLearning();
@@ -349,6 +351,8 @@ private:
     QString m_pendingWifiScanError;
     QVariantList m_ethernetPorts;
     QString m_ethernetOperationInterface;
+    QVariantMap m_powerManagement;
+    QString m_lastPowerEvent;
     bool m_batteryAvailable = false;
     int m_batteryPercent = -1;
     QString m_batteryStatus;
@@ -363,7 +367,7 @@ private:
     int m_batteryRawCurrentMa = 0;
     int m_batteryRemainingMah = -1;
     int m_batteryFullChargeMah = -1;
-    int m_batteryDesignCapacityMah = 10000;
+    int m_batteryDesignCapacityMah = -1;
     bool m_gaugeCommunication = false;
     QString m_gaugeError;
     QString m_batteryCalibrationStatus = QStringLiteral("未校准");
@@ -433,8 +437,8 @@ private:
     int m_sleepPowerLevel = 1;
     QStringList m_keepScreenOnApps;
     bool m_wakeLockActive = false;
-    int m_chargerInputLimitMa = 2400;
-    int m_chargerFastCurrentMa = 2400;
+    int m_chargerInputLimitMa = -1;
+    int m_chargerFastCurrentMa = -1;
     int m_batteryCapacityLearningStep = 0;
     QString m_batteryCapacityLearningStatus;
     bool m_batteryCalibrationRollbackAvailable = false;
@@ -442,3 +446,4 @@ private:
     int m_brightnessBeforeSleep = 50;
     QString m_savedScopeBeforeSleep;
 };
+
