@@ -126,6 +126,7 @@ class SystemBackend final : public QObject
 
 public:
     explicit SystemBackend(QObject *parent = nullptr);
+    ~SystemBackend() override;
 
     QString version() const;
     QString hostname() const;
@@ -430,8 +431,6 @@ private:
     QProcess m_feedbackProcess;
     int m_pendingBrightnessPercent = 30;
     QTimer m_brightnessSetTimer;
-    QTimer m_cpuBoostReleaseTimer;
-    QVector<QPair<QString, QByteArray>> m_cpuBoostRestoreMins;
     bool m_screenSleeping = false;
     int m_sleepTimeoutSeconds = 60;
     int m_sleepPowerLevel = 1;
@@ -442,7 +441,6 @@ private:
     int m_batteryCapacityLearningStep = 0;
     QString m_batteryCapacityLearningStatus;
     bool m_batteryCalibrationRollbackAvailable = false;
-    QVector<QPair<QString, QByteArray>> m_savedCpufreqLimits;
     int m_brightnessBeforeSleep = 50;
     QString m_savedScopeBeforeSleep;
 };

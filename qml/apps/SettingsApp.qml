@@ -1091,8 +1091,8 @@ Rectangle {
 
                             ColumnLayout {
                                 width: parent.width; spacing: 2
-                                Text { text: "系统休眠功耗等级"; color: "#27222D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 18; font.weight: Font.DemiBold }
-                                Text { text: "配置进入休眠时的系统级低功耗节能深度"; color: "#77717D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13 }
+                                Text { text: "息屏节能方式"; color: "#27222D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 18; font.weight: Font.DemiBold }
+                                Text { text: "由电源后台统一协调息屏节能与温控限制"; color: "#77717D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 13 }
                             }
 
                             RowLayout {
@@ -1145,8 +1145,8 @@ Rectangle {
                                         }
                                         ColumnLayout {
                                             Layout.fillWidth: true; spacing: 1
-                                            Text { text: "深度系统休眠"; color: "#27222D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 15; font.weight: Font.DemiBold }
-                                            Text { text: "CPU锁定408MHz · 硬件极低功耗"; color: "#77717D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 12 }
+                                            Text { text: "息屏后台节能"; color: "#27222D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 15; font.weight: Font.DemiBold }
+                                            Text { text: "请求 CPU 上限 408MHz · 后台仲裁"; color: "#77717D"; font.family: "Noto Sans CJK SC"; font.pixelSize: 12 }
                                         }
                                     }
                                     MouseArea { id: level1Mouse; anchors.fill: parent; preventStealing: true; onClicked: systemBackend.setSleepPowerLevel(1) }

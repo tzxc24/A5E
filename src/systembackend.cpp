@@ -34,8 +34,22 @@
 
 namespace {
 
-const QString kCpuFreqSleepStatePath = QStringLiteral("/var/lib/meow-os/cpufreq-sleep.state");
-const QString kCpuFreqBoostStatePath = QStringLiteral("/var/lib/meow-os/cpufreq-boost.state");
+const QString kScreenSleepMarker = QStringLiteral("/run/meow-os/screen-sleeping");
+
+bool setScreenSleepRequest(bool sleeping)
+{
+#ifdef Q_OS_LINUX
+    if (!sleeping) return !QFileInfo::exists(kScreenSleepMarker) || QFile::remove(kScreenSleepMarker);
+    if (!QDir().mkpath(QStringLiteral("/run/meow-os"))) return false;
+    QSaveFile marker(kScreenSleepMarker);
+    if (!marker.open(QIODevice::WriteOnly)) return false;
+    if (marker.write("sleep\n") != 6) return false;
+    return marker.commit();
+#else
+    Q_UNUSED(sleeping)
+    return true;
+#endif
+}
 
 QString formatBytes(qint64 bytes);
 
@@ -44,19 +58,6 @@ QString readTextFile(const QString &path)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
     return QString::fromLocal8Bit(file.readAll()).trimmed();
-}
-
-bool saveCpuFreqState(const QString &path, const QVector<QPair<QString, QByteArray>> &limits)
-{
-    QSaveFile state(path);
-    if (!state.open(QIODevice::WriteOnly | QIODevice::Text)) return false;
-    for (const auto &limit : limits) {
-        state.write(limit.first.toUtf8());
-        state.write("\t");
-        state.write(limit.second);
-        state.write("\n");
-    }
-    return state.commit();
 }
 
 struct ProcessResult {
@@ -796,6 +797,8 @@ QString availableDestination(const QString &directory, const QString &name)
 SystemBackend::SystemBackend(QObject *parent)
     : QObject(parent)
 {
+    setScreenSleepRequest(false);
+    connect(QCoreApplication::instance(), &QCoreApplication::aboutToQuit, this, []() { setScreenSleepRequest(false); });
     m_hardwareCapabilities = detectHardwareCapabilities(&m_boardProfile);
     m_batteryCalibrationStatus = QStringLiteral("已禁用");
     m_batteryCalibrationSummary = QStringLiteral("旧校准配置保留但不再应用；电池实际容量尚未确认");
@@ -856,10 +859,6 @@ SystemBackend::SystemBackend(QObject *parent)
         }
     }
 
-    m_cpuBoostReleaseTimer.setSingleShot(true);
-    m_cpuBoostReleaseTimer.setInterval(320);
-    connect(&m_cpuBoostReleaseTimer, &QTimer::timeout,
-            this, &SystemBackend::releaseInteractiveCpuBoost);
     m_runtimeScheduler.setInteractiveWakeupCallback([this]() {
         QMetaObject::invokeMethod(this, [this]() { activateInteractiveCpuBoost(); },
                                   Qt::QueuedConnection);
@@ -1146,6 +1145,11 @@ void SystemBackend::setActiveScope(const QString &scope)
     if (!m_statusTaskRunning) refreshStatus();
 }
 
+SystemBackend::~SystemBackend()
+{
+    setScreenSleepRequest(false);
+}
+
 void SystemBackend::boostInteractivePerformance(int tier, int durationMs)
 {
     activateInteractiveCpuBoost(tier, durationMs);
@@ -1158,48 +1162,14 @@ void SystemBackend::releaseInteractivePerformance()
 
 void SystemBackend::activateInteractiveCpuBoost(int tier, int durationMs)
 {
-    if (m_screenSleeping) return;
-    const int timeout = durationMs > 0 ? durationMs : (tier >= 2 ? 650 : 280);
-    if (!m_cpuBoostRestoreMins.isEmpty()) {
-        m_cpuBoostReleaseTimer.start(timeout);
-        return;
-    }
-    if (m_cpuBoostRestoreMins.isEmpty()) {
-        const QDir cpufreq(QStringLiteral("/sys/devices/system/cpu/cpufreq"));
-        const QStringList policies = cpufreq.entryList({QStringLiteral("policy*")}, QDir::Dirs | QDir::NoDotAndDotDot);
-        for (const QString &policy : policies) {
-            const QString base = cpufreq.absoluteFilePath(policy);
-            const QString minPath = base + QStringLiteral("/scaling_min_freq");
-            const QByteArray currentMin = readTextFile(minPath).toLocal8Bit();
-            const QByteArray maximum = readTextFile(base + QStringLiteral("/scaling_max_freq")).toLocal8Bit();
-            if (currentMin.isEmpty() || maximum.isEmpty()) continue;
-            m_cpuBoostRestoreMins.append(qMakePair(minPath, currentMin));
-        }
-        if (!saveCpuFreqState(kCpuFreqBoostStatePath, m_cpuBoostRestoreMins)) {
-            m_cpuBoostRestoreMins.clear();
-            return;
-        }
-        for (const auto &entry : m_cpuBoostRestoreMins) {
-            const QString base = QFileInfo(entry.first).absolutePath();
-            const QByteArray maximum = readTextFile(base + QStringLiteral("/scaling_max_freq")).toLocal8Bit();
-            QFile file(entry.first);
-            if (!maximum.isEmpty() && file.open(QIODevice::WriteOnly | QIODevice::Text))
-                file.write(maximum + '\n');
-        }
-    }
-    m_cpuBoostReleaseTimer.start(timeout);
+    // Compatibility hook: the power guardian owns all CPU policy writes.
+    Q_UNUSED(tier)
+    Q_UNUSED(durationMs)
 }
 
 void SystemBackend::releaseInteractiveCpuBoost()
 {
-    m_cpuBoostReleaseTimer.stop();
-    for (const auto &entry : m_cpuBoostRestoreMins) {
-        QFile file(entry.first);
-        if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) continue;
-        file.write(entry.second + '\n');
-    }
-    m_cpuBoostRestoreMins.clear();
-    QFile::remove(kCpuFreqBoostStatePath);
+    // No kernel writes: releasing an interaction must not undo thermal limits.
 }
 
 qint64 SystemBackend::idleMs() const
@@ -1977,6 +1947,8 @@ void SystemBackend::setSleepPowerLevel(int level)
 {
     if (m_sleepPowerLevel == level) return;
     m_sleepPowerLevel = level;
+    if (m_screenSleeping && !setScreenSleepRequest(level == 1))
+        emit operationMessage(QStringLiteral("无法更新电源后台息屏请求"), false);
     QSettings displaySettings(QStringLiteral("Meow OS"), QStringLiteral("display"));
     displaySettings.setValue(QStringLiteral("sleepPowerLevel"), m_sleepPowerLevel);
     emit sleepPowerLevelChanged();
@@ -2027,7 +1999,6 @@ void SystemBackend::setScreenSleeping(bool sleeping)
     if (m_screenSleeping == sleeping) return;
     m_screenSleeping = sleeping;
     if (m_screenSleeping) {
-        m_cpuBoostReleaseTimer.stop();
         releaseInteractiveCpuBoost();
         m_brightnessBeforeSleep = m_displayBrightnessPercent > 0 ? m_displayBrightnessPercent : 50;
         if (!m_backlightPath.isEmpty() && m_brightnessMax > 0) {
@@ -2040,44 +2011,11 @@ void SystemBackend::setScreenSleeping(bool sleeping)
         m_savedScopeBeforeSleep = m_activeScope;
         m_activeScope = QStringLiteral("sleeping");
 
-        // True System-Level Deep Low-Power Throttling
-        if (m_sleepPowerLevel == 1) {
-            m_savedCpufreqLimits.clear();
-            const QDir cpufreq(QStringLiteral("/sys/devices/system/cpu/cpufreq"));
-            const QStringList policies = cpufreq.entryList(
-                    {QStringLiteral("policy*")}, QDir::Dirs | QDir::NoDotAndDotDot);
-            QStringList policyDirs;
-            for (const QString &policy : policies)
-                policyDirs.append(cpufreq.absoluteFilePath(policy));
-            for (const QString &dirPath : policyDirs) {
-                const QString maxFreqPath = dirPath + QStringLiteral("/scaling_max_freq");
-                const QByteArray current = readTextFile(maxFreqPath).toLocal8Bit();
-                if (!current.isEmpty())
-                    m_savedCpufreqLimits.append(qMakePair(maxFreqPath, current));
-            }
-            // Never lower the policy ceiling unless the exact original values
-            // are durable. A service restart during sleep can then recover them.
-            if (saveCpuFreqState(kCpuFreqSleepStatePath, m_savedCpufreqLimits)) {
-                for (const auto &limit : m_savedCpufreqLimits) {
-                    QFile maxFreqFile(limit.first);
-                    if (maxFreqFile.open(QIODevice::WriteOnly | QIODevice::Text))
-                        maxFreqFile.write("408000\n");
-                }
-            } else {
-                m_savedCpufreqLimits.clear();
-            }
-        }
+        if (!setScreenSleepRequest(m_sleepPowerLevel == 1))
+            emit operationMessage(QStringLiteral("息屏请求未送达电源后台，屏幕已关闭"), false);
     } else {
-        // Restore CPU Frequency scaling limits on wake
-        for (const auto &pair : m_savedCpufreqLimits) {
-            QFile maxFreqFile(pair.first);
-            if (maxFreqFile.exists() && maxFreqFile.open(QIODevice::WriteOnly | QIODevice::Text)) {
-                maxFreqFile.write(pair.second + "\n");
-                maxFreqFile.close();
-            }
-        }
-        m_savedCpufreqLimits.clear();
-        QFile::remove(kCpuFreqSleepStatePath);
+        if (!setScreenSleepRequest(false))
+            emit operationMessage(QStringLiteral("无法清除息屏请求，请检查电源后台运行目录"), false);
 
         if (!m_backlightPath.isEmpty() && m_brightnessMax > 0) {
             const int targetPercent = m_brightnessBeforeSleep > 0 ? m_brightnessBeforeSleep : 50;
