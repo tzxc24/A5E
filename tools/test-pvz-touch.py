@@ -9,6 +9,15 @@ spec=importlib.util.spec_from_file_location('touch',Path(__file__).resolve().par
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 
 class TouchTests(unittest.TestCase):
+    def test_finds_game_below_fullscreen_wrapper(self):
+        children={1:2,2:3,3:0};titles={1:'',2:'',3:'PvZ Portable'}
+        self.assertEqual(m.game_window_at_pointer(1,children.get,titles.get),3)
+    def test_keyboard_click_does_not_request_game_focus(self):
+        children={1:4,4:5,5:0};titles={1:'',4:'Onboard',5:''}
+        self.assertIsNone(m.game_window_at_pointer(1,children.get,titles.get))
+    def test_disappearing_window_or_cycle_is_safe(self):
+        self.assertIsNone(m.game_window_at_pointer(1,lambda window:None,lambda window:''))
+        self.assertIsNone(m.game_window_at_pointer(1,lambda window:window,lambda window:''))
     def test_rotated_corners(self):
         self.assertEqual(m.map_touch(0,0,(0,799),(0,1279)),(1279,0))
         self.assertEqual(m.map_touch(799,1279,(0,799),(0,1279)),(0,799))
