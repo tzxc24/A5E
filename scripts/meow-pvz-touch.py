@@ -9,14 +9,15 @@ def map_touch(x,y,x_range,y_range,width=1280,height=800):
     return round((1-ny)*(width-1)),round(nx*(height-1))
 
 class TouchState:
-    def __init__(self):
-        self.slot=0;self.slots={};self.primary=None;self.down=False
+    def __init__(self,initial=None):
+        self.slot=0;self.slots={};self.positions={};self.primary=None;self.down=False
+        if initial is not None:self.positions[0]={'x':initial[0],'y':initial[1]}
     def feed(self,kind,code,value):
         if kind==3:
             if code==47:self.slot=value
             elif code==57:
                 if value<0:self.slots.pop(self.slot,None)
-                else:self.slots[self.slot]={'x':None,'y':None}
+                else:self.slots[self.slot]=self.positions.setdefault(self.slot,{'x':None,'y':None})
             elif code in (53,54) and self.slot in self.slots:
                 self.slots[self.slot]['x' if code==53 else 'y']=value
         if kind!=0 or code!=0:return []
@@ -47,15 +48,17 @@ def main():
     display=x.XOpenDisplay(os.environ.get('DISPLAY',':1').encode())
     if not display:raise RuntimeError('X display unavailable')
     fd=os.open(sys.argv[1],os.O_RDONLY|os.O_NONBLOCK)
+    current={}
     def axis(code):
         values=array.array('i',[0]*6)
         fcntl.ioctl(fd,0x80184500+0x40+code,values,True)
         if values[2]<=values[1]:raise RuntimeError('Invalid touchscreen axis range')
+        current[code]=values[0]
         return values[1],values[2]
     xr,yr=axis(53),axis(54)
     print('PVZ_TOUCH_READY',xr,yr,flush=True)
     poll=select.poll();poll.register(fd,select.POLLIN)
-    event=struct.Struct('llHHi');state=TouchState()
+    event=struct.Struct('llHHi');state=TouchState((current[53],current[54]))
     def stop(signum,frame):raise SystemExit(0)
     signal.signal(signal.SIGTERM,stop);signal.signal(signal.SIGINT,stop)
     try:

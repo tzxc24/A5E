@@ -25,5 +25,10 @@ class TouchTests(unittest.TestCase):
         self.assertEqual(s.feed(0,0,0),[('move',10,20)])
         s.feed(3,47,0);s.feed(3,53,15)
         self.assertEqual(s.feed(0,0,0),[('move',15,20)])
+    def test_reused_slot_can_omit_unchanged_axis(self):
+        s=m.TouchState();s.feed(3,57,1);s.feed(3,53,100);s.feed(3,54,200);s.feed(0,0,0)
+        s.feed(3,57,-1);s.feed(0,0,0)
+        s.feed(3,57,2);s.feed(3,53,110)
+        self.assertEqual(s.feed(0,0,0),[('move',110,200),('button',1)])
 
 if __name__=='__main__':unittest.main()
