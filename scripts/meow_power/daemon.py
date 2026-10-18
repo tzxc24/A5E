@@ -100,11 +100,15 @@ def main(argv=None):
         decision=policy.update(now,temperature,state['batteryVoltageMv'] if pm['voltageValid'] else None,
                                state['batteryCurrentMa'] if pm['currentValid'] else None)
         sleeping=Path(args.sleep_marker).exists()
-        if policy.cooldown:
-            limiter.cooldown=True
-            limiter.save()
-        if sleeping or policy.throttled or temperature is not None:
-            cpu_errors=enforce_cpu(limiter,policy.throttled,sleeping,policy.cap)
+        # Commit the policy latch before *any* hardware change. A crash directly
+        # after the first cap write must restart with the same cooling obligation.
+        thermal_latched=policy.throttled or policy.cooldown
+        limiter.throttled=thermal_latched
+        limiter.cooldown=policy.cooldown
+        limiter.restriction_reason='thermal' if thermal_latched else 'sleep' if sleeping else 'none'
+        limiter.save()
+        if sleeping or thermal_latched or temperature is not None:
+            cpu_errors=enforce_cpu(limiter,thermal_latched,sleeping,policy.cap)
             errors.extend(cpu_errors)
             if cpu_errors and decision['restore']:
                 policy.throttled=True

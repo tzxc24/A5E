@@ -6,6 +6,85 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 tempfile.tempdir=str(Path(__file__).resolve().parents[1] / 'tmp')
 
 class HardwareTests(unittest.TestCase):
+    def test_inconsistent_persisted_cooldown_is_thermal_latch(self):
+        import json
+        from meow_power.hardware import CpuLimiter
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            state=root/'limits.json'
+            state.write_text(json.dumps(dict(bootId='boot',limits={},cooldown=True,throttled=False)))
+            limiter=CpuLimiter(root,state,'boot')
+            self.assertTrue(limiter.throttled)
+
+    def test_legacy_false_latch_and_cooldown_restart_never_raise_cap(self):
+        import json
+        from unittest.mock import patch
+        from meow_power.daemon import main
+        for cooldown in (False,True):
+            with self.subTest(cooldown=cooldown), tempfile.TemporaryDirectory() as directory:
+                root=Path(directory)
+                cpu=root/'devices/system/cpu/cpufreq/policy0'
+                cpu.mkdir(parents=True)
+                maximum=cpu/'scaling_max_freq'
+                maximum.write_text('1008000')
+                state=dict(bootId='boot',limits={str(maximum):dict(original=1800000,applied=1008000)},
+                           throttled=False,cooldown=cooldown)
+                (root/'limits.json').write_text(json.dumps(state))
+                (root/'boot').write_text('boot')
+                (root/'uptime').write_text('100 0')
+                args=['--once','--config',str(root/'no-config'),'--state-file',str(root/'state.json'),
+                      '--policy-state',str(root/'limits.json'),'--sysfs-root',str(root),
+                      '--boot-id-file',str(root/'boot'),'--uptime-file',str(root/'uptime'),
+                      '--i2c-device',str(root/'no-i2c'),'--sleep-marker',str(root/'sleeping')]
+                with patch('meow_power.daemon.board_temperature',return_value=(79,'cpu',[])), patch('meow_power.daemon.stop_games',return_value=[]):
+                    self.assertEqual(main(args),0)
+                self.assertEqual(maximum.read_text(),'1008000')
+
+    def test_explicit_sleep_only_restart_does_not_create_thermal_latch(self):
+        from meow_power.hardware import CpuLimiter
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            cpu=root/'devices/system/cpu/cpufreq/policy0'
+            cpu.mkdir(parents=True)
+            (cpu/'scaling_max_freq').write_text('1800000')
+            limiter=CpuLimiter(root,root/'limits.json','boot')
+            limiter.restriction_reason='sleep'
+            limiter.limit(408000)
+            self.assertFalse(CpuLimiter(root,root/'limits.json','boot').throttled)
+
+    def test_cap_side_effect_has_already_persisted_thermal_latch(self):
+        import json
+        from unittest.mock import patch
+        from meow_power.daemon import main
+        from meow_power.policy import Policy
+        from meow_power.hardware import CpuLimiter
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            cpu=root/'devices/system/cpu/cpufreq/policy0'
+            cpu.mkdir(parents=True)
+            maximum=cpu/'scaling_max_freq'
+            maximum.write_text('1800000')
+            (root/'boot').write_text('boot')
+            (root/'uptime').write_text('4 0')
+            policy=Policy()
+            policy.update(0,80)
+            original_limit=CpuLimiter.limit
+            def interrupted_limit(limiter,cap):
+                original_limit(limiter,cap)
+                persisted=json.loads((root/'limits.json').read_text())
+                self.assertTrue(persisted['throttled'])
+                raise RuntimeError('simulated crash immediately after CPU write')
+            args=['--once','--config',str(root/'no-config'),'--state-file',str(root/'state.json'),
+                  '--policy-state',str(root/'limits.json'),'--sysfs-root',str(root),
+                  '--boot-id-file',str(root/'boot'),'--uptime-file',str(root/'uptime'),
+                  '--i2c-device',str(root/'no-i2c'),'--sleep-marker',str(root/'sleeping')]
+            with patch('meow_power.daemon.Policy',return_value=policy), patch('meow_power.daemon.board_temperature',return_value=(80,'cpu',[])), patch.object(CpuLimiter,'limit',interrupted_limit):
+                with self.assertRaises(RuntimeError): main(args)
+            (root/'uptime').write_text('6 0')
+            with patch('meow_power.daemon.board_temperature',return_value=(79,'cpu',[])):
+                self.assertEqual(main(args),0)
+            self.assertEqual(maximum.read_text(),'1008000')
+
     def test_restore_failure_reports_protection_message(self):
         import json
         from unittest.mock import patch

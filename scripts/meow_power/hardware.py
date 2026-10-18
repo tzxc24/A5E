@@ -28,16 +28,22 @@ class CpuLimiter:
         self.records={}
         self.cooldown=False
         self.throttled=False
+        self.restriction_reason='none'
         if self.path.exists():
             if not root_owned(self.path): raise ValueError('CPU 状态文件必须由 root 所有且不可由其他用户写入')
             state=json.loads(self.path.read_text(encoding='utf-8'))
             if state.get('bootId') == boot:
                 self.records=state.get('limits',{})
                 self.cooldown=bool(state.get('cooldown',False))
-                self.throttled=bool(state.get('throttled',bool(self.records)))
+                self.restriction_reason=state.get('restrictionReason','unknown')
+                # Older/crash-interrupted states cannot prove that recorded caps
+                # were sleep-only. Never clear a thermal latch on that evidence.
+                self.throttled=(self.cooldown or bool(state.get('throttled',False)) or
+                                (bool(self.records) and self.restriction_reason != 'sleep'))
 
     def save(self):
-        atomic_json(self.path,dict(bootId=self.boot,limits=self.records,cooldown=self.cooldown,throttled=self.throttled),0o600)
+        atomic_json(self.path,dict(bootId=self.boot,limits=self.records,cooldown=self.cooldown,
+                                  throttled=self.throttled,restrictionReason=self.restriction_reason),0o600)
 
     def limit(self, cap):
         errors=[]
