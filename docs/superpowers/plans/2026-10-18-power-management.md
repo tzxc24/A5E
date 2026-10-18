@@ -48,3 +48,5 @@ Files: add `systemd/meow-power.service`, `config/power-management.json`; modify 
 
 
 Progress: local implementation, Windows Qt build, 25 policy tests, snapshot reader tests, shell/repository checks, and both reviews passed. Device SSH unavailable; ARM build, backup, installation and live verification remain pending.
+
+Device follow-up: deployed 0.3.104 to 192.168.1.104 after backup; ARM build, 25 Python tests and ARM Qt reader tests passed. Desktop/PvZ/desktop handoff retained guardian PID1134 and boot ID. User visual confirmation and long-duration thermal observation remain outstanding; no deliberate heating performed. See output deployment record.
