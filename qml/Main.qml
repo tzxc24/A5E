@@ -77,7 +77,6 @@ ApplicationWindow {
     property var cachedReactionGame: null
     property var cachedFileManager: null
     property var cachedSettings: null
-    property var cachedPvZ: null
 
     function getAppObject(appId) {
         if (appId === "touch-test") {
@@ -92,11 +91,6 @@ ApplicationWindow {
                 if (cachedReactionGame) cachedReactionGame.StackView.destroyOnPop = true
             }
             return cachedReactionGame
-        } else if (appId === "pvz") {
-            if (!cachedPvZ || !cachedPvZ.parent) {
-                cachedPvZ = pvzComponent.createObject(stack)
-            }
-            return cachedPvZ
         } else if (appId === "files") {
             if (!cachedFileManager || !cachedFileManager.parent) {
                 cachedFileManager = fileManagerComponent.createObject(stack)
@@ -117,6 +111,7 @@ ApplicationWindow {
     }
 
     function openApp(appId, immediate) {
+        if (appId === "pvz") { systemBackend.launchPvZ(); return }
         if (stack.depth > 1) {
             window.showOperationMessage("已有应用正在运行，请先退出", false)
             return
@@ -138,10 +133,6 @@ ApplicationWindow {
 
     function closeForegroundApp() {
         var appId = stack.currentItem ? stack.currentItem.objectName : ""
-        if (appId === "pvz") {
-            stack.currentItem.prepareExit()
-            cachedPvZ = null
-        }
         if (stack.depth > 1) stack.pop()
         if (appId.length) systemBackend.endForegroundApp(appId)
     }
@@ -172,7 +163,6 @@ ApplicationWindow {
 
         // App-level Keep Screen On / Wake Lock Check
         var currentAppId = stack.currentItem ? stack.currentItem.objectName : ""
-        if (currentAppId === "pvz") return
         if (systemBackend.wakeLockActive || (currentAppId.length > 0 && systemBackend.isAppKeepScreenOn(currentAppId))) {
             return
         }
@@ -370,7 +360,7 @@ ApplicationWindow {
             }
 
             Component.onCompleted: {
-                if (Qt.application.arguments.indexOf("--pvz") >= 0) openApp("pvz", true)
+                if (Qt.application.arguments.indexOf("--pvz") >= 0) systemBackend.launchPvZ()
                 else if (window.startInSettings) openApp("settings", true)
                 else if (window.startInFiles) openApp("files", true)
                 else if (window.startInMindustry) window.launchMindustryDirect()
@@ -550,14 +540,6 @@ ApplicationWindow {
         id: reactionGameComponent
         ReactionGameApp {
             objectName: "reaction-game"
-            onExitRequested: window.closeForegroundApp()
-            onBackRequested: window.closeForegroundApp()
-        }
-    }
-
-    Component {
-        id: pvzComponent
-        PvZApp {
             onExitRequested: window.closeForegroundApp()
             onBackRequested: window.closeForegroundApp()
         }

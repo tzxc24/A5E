@@ -1,0 +1,2 @@
+# Only queue the dedicated game unit; never grant arbitrary systemctl access.
+radxa ALL=(root) NOPASSWD: /bin/systemctl --no-block start meow-pvz.service

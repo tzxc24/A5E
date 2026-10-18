@@ -1140,6 +1140,16 @@ SystemBackend::SystemBackend(QObject *parent)
                               requested);
         emit schedulerChanged();
     });
+    connect(&m_pvzLaunchProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this](int code, QProcess::ExitStatus status) {
+        const bool ok = code == 0 && status == QProcess::NormalExit;
+        emit operationMessage(ok ? QStringLiteral("植物大战僵尸正在启动…")
+                                 : QStringLiteral("游戏启动失败，请检查 meow-pvz 服务与授权"), ok);
+    });
+    connect(&m_pvzLaunchProcess, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart)
+            emit operationMessage(QStringLiteral("无法执行游戏启动命令"), false);
+    });
     refresh();
     QTimer::singleShot(250, this, &SystemBackend::refreshPerformance);
 }
@@ -2114,6 +2124,22 @@ void SystemBackend::launchMindustry()
     m_mindustryLaunchPollTimer.start();
     emit operationMessage(QStringLiteral("像素工厂启动请求已提交…"), true);
     emit schedulerChanged();
+}
+
+void SystemBackend::launchPvZ()
+{
+    if (m_pvzLaunchProcess.state() != QProcess::NotRunning) return;
+    const QString gameDir = QStringLiteral("/home/radxa/games/pvz");
+    if (!QFileInfo(gameDir + QStringLiteral("/pvz-portable")).isExecutable()
+            || !QFileInfo::exists(gameDir + QStringLiteral("/main.pak"))
+            || !QFileInfo(gameDir + QStringLiteral("/properties")).isDir()) {
+        emit operationMessage(QStringLiteral("未找到原生游戏或资源，请先安装 PvZ-Portable"), false);
+        return;
+    }
+    m_pvzLaunchProcess.start(QStringLiteral("sudo"),
+                            {QStringLiteral("-n"), QStringLiteral("/bin/systemctl"),
+                             QStringLiteral("--no-block"), QStringLiteral("start"),
+                             QStringLiteral("meow-pvz.service")});
 }
 
 void SystemBackend::setDisplayBrightness(int percent)

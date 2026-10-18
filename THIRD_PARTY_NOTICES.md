@@ -34,3 +34,12 @@ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
 ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ```
+# PvZ-Portable (external game)
+
+The native game entry launches the separately installed community engine:
+https://github.com/wszqkzqk/PvZ-Portable . The tested device checkout is
+d77bf193b90502dce7594b3e6db556a11825f63e. Its upstream license files and
+corresponding source stay with that external checkout; they are not
+relicensed by the MeowOS MIT license. No upstream engine source or original
+game assets are incorporated into this repository. The game owner supplies
+the GOTY main.pak and properties directory independently.

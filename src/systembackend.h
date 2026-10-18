@@ -249,6 +249,7 @@ public:
     Q_INVOKABLE void setVolume(int percent);
     Q_INVOKABLE void playVolumeFeedback();
     Q_INVOKABLE void launchMindustry();
+    Q_INVOKABLE void launchPvZ();
     Q_INVOKABLE void setDisplayBrightness(int percent);
     Q_INVOKABLE void setSleepTimeoutSeconds(int seconds);
     Q_INVOKABLE void setSleepTimeoutIndex(int index);
@@ -418,6 +419,7 @@ private:
     std::uint64_t m_runtimeSequence = 0;
     std::future<void> m_mindustryLaunchFuture;
     QTimer m_mindustryLaunchPollTimer;
+    QProcess m_pvzLaunchProcess;
     int m_pendingVolumePercent = 65;
     QTimer m_volumeSetTimer;
     QProcess m_volumeSetProcess;

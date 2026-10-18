@@ -116,6 +116,11 @@ sed 's/\r$//' systemd/meow-os.service > /tmp/meow-os.service && install -m 0644 
 sed 's/\r$//' systemd/meow-console-recovery.service > /tmp/meow-console-recovery.service && install -m 0644 /tmp/meow-console-recovery.service /etc/systemd/system/meow-console-recovery.service
 sed 's/\r$//' systemd/meow-mindustry.service > /tmp/meow-mindustry.service && install -m 0644 /tmp/meow-mindustry.service /etc/systemd/system/meow-mindustry.service
 sed 's/\r$//' config/meow-mindustry-sudoers > /tmp/meow-mindustry-sudoers && install -m 0440 /tmp/meow-mindustry-sudoers /etc/sudoers.d/meow-mindustry
+sed 's/\r$//' scripts/meow-pvz-launch.sh > /tmp/meow-pvz-launch.sh && install -m 0755 /tmp/meow-pvz-launch.sh /opt/meow-os/bin/meow-pvz-launch.sh
+install -m 0644 scripts/meow-pvz-keyboard.py /opt/meow-os/bin/meow-pvz-keyboard.py
+install -m 0644 scripts/meow-pvz-touch.py /opt/meow-os/bin/meow-pvz-touch.py
+sed 's/\r$//' systemd/meow-pvz.service > /tmp/meow-pvz.service && install -m 0644 /tmp/meow-pvz.service /etc/systemd/system/meow-pvz.service
+sed 's/\r$//' config/meow-pvz-sudoers > /tmp/meow-pvz-sudoers && visudo -cf /tmp/meow-pvz-sudoers && install -m 0440 /tmp/meow-pvz-sudoers /etc/sudoers.d/meow-pvz
 sed 's/\r$//' systemd/meow-boot-log.service > /tmp/meow-boot-log.service && install -m 0644 /tmp/meow-boot-log.service /etc/systemd/system/meow-boot-log.service
 sed 's/\r$//' systemd/meow-diagnostic-capture@.service > /tmp/meow-diagnostic-capture@.service && install -m 0644 /tmp/meow-diagnostic-capture@.service /etc/systemd/system/meow-diagnostic-capture@.service
 install -m 0644 systemd/meow-charge-enable.service /etc/systemd/system/meow-charge-enable.service

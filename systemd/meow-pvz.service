@@ -1,0 +1,17 @@
+[Unit]
+Description=PvZ-Portable game session for Meow OS
+Conflicts=meow-os.service meow-mindustry.service
+After=meow-os.service meow-mindustry.service systemd-user-sessions.service
+
+[Service]
+Type=simple
+RuntimeDirectory=meow-pvz
+ExecStartPre=/opt/meow-os/bin/meow-pvz-launch.sh --check
+ExecStart=/opt/meow-os/bin/meow-pvz-launch.sh
+ExecStopPost=-/bin/systemctl --no-block start meow-os.service
+KillMode=control-group
+TimeoutStopSec=10s
+Restart=no
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=meow-pvz

@@ -158,6 +158,11 @@ grep -q 'qaSwitchTimer' qml/apps/SettingsApp.qml
 ! grep -q 'bgAppPrewarmTimer' qml/Main.qml
 test "$(grep -c 'StackView.destroyOnPop = true' qml/Main.qml)" -eq 3
 grep -q 'StackView.onRemoved' qml/apps/PvZApp.qml
+test -f scripts/meow-pvz-launch.sh
+test -f scripts/meow-pvz-touch.py
+test -f scripts/meow-pvz-keyboard.py
+test -f systemd/meow-pvz.service
+grep -q 'launchPvZ' src/systembackend.h
 grep -q 'cachedSettings.StackView.destroyOnPop = false' qml/Main.qml
 ! grep -q '驱动未提供忙碌率' qml/apps/SettingsApp.qml
 grep -q '\$1 == "timeout" { \$2 = "0" }' scripts/configure-boot-branding

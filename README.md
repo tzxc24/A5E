@@ -43,14 +43,17 @@ make -j2
 
 ## 内置草坪塔防小游戏
 
-桌面点击“植物大战僵尸”进入离线小游戏，或运行 `meow-os --pvz`。
-先点植物卡片，再点草坪种植；点击阳光补充资源，铲子可移除植物。
-包含八种植物、三波起步的关卡、一次性割草机、暂停、倍速及重新开始。
-退出会保存进行中的战斗，游戏前台保持亮屏，退出后恢复原有息屏策略。
-植物与僵尸使用本地自绘 SVG，不需要外部游戏引擎或原版资源包。
+桌面点击“植物大战僵尸”启动独立的 PvZ-Portable 社区开源引擎，
+或运行 `meow-os --pvz`。引擎位置为 `/home/radxa/games/pvz/pvz-portable`，
+游戏所有者需在同目录提供 GOTY 资源 `main.pak` 和 `properties/`。
+游戏通过 `meow-pvz.service` 独占 X11 会话，退出后恢复 MeowOS 桌面。
+提供会话内的触摸转鼠标适配、左旋横屏、屏幕键盘入口和原生存档。
+存档沿用 `~/.local/share/io.github.wszqkzqk/PvZPortable/`。
+旧 QML 小游戏源码保留用于回归和回退，桌面入口已切换到原生游戏。
 
-QML 行为测试：安装 Qt Quick Test 后运行 `qmltestrunner -input tools/qml-tests`。
-Windows 本地预览：`powershell -ExecutionPolicy Bypass -File output/run-preview.ps1 -PvZ`。
+测试：`python3 tools/test-pvz-launcher.py`、`python3 tools/test-pvz-touch.py`；
+旧 QML 游戏回归：`qmltestrunner -input tools/qml-tests`。
+Windows 可编译桌面，原生游戏入口需要目标 Linux 的游戏资源和服务。
 
 ## 版本更新规则
 
