@@ -30,6 +30,22 @@
         <file>qml/apps/qmldir</file>
         <file>qml/apps/TouchTestApp.qml</file>
         <file>qml/apps/ReactionGameApp.qml</file>
+        <file>qml/apps/PvZApp.qml</file>
+        <file>assets/icons/pvz.svg</file>
+        <file>assets/icons/pvz-cherrybomb.svg</file>
+        <file>assets/icons/pvz-chomper.svg</file>
+        <file>assets/icons/pvz-peashooter.svg</file>
+        <file>assets/icons/pvz-potatomine.svg</file>
+        <file>assets/icons/pvz-repeater.svg</file>
+        <file>assets/icons/pvz-snowpea.svg</file>
+        <file>assets/icons/pvz-sunflower.svg</file>
+        <file>assets/icons/pvz-wallnut.svg</file>
+        <file>assets/icons/pvz-zombie-buckethead.svg</file>
+        <file>assets/icons/pvz-zombie-conehead.svg</file>
+        <file>assets/icons/pvz-zombie-flag.svg</file>
+        <file>assets/icons/pvz-zombie-football.svg</file>
+        <file>assets/icons/pvz-zombie-newspaper.svg</file>
+        <file>assets/icons/pvz-zombie-regular.svg</file>
         <file>qml/apps/FileManagerApp.qml</file>
         <file>qml/apps/SettingsApp.qml</file>
         <file>assets/wallpaper.jpg</file>

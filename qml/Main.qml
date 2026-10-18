@@ -77,6 +77,7 @@ ApplicationWindow {
     property var cachedReactionGame: null
     property var cachedFileManager: null
     property var cachedSettings: null
+    property var cachedPvZ: null
 
     function getAppObject(appId) {
         if (appId === "touch-test") {
@@ -91,6 +92,11 @@ ApplicationWindow {
                 if (cachedReactionGame) cachedReactionGame.StackView.destroyOnPop = true
             }
             return cachedReactionGame
+        } else if (appId === "pvz") {
+            if (!cachedPvZ || !cachedPvZ.parent) {
+                cachedPvZ = pvzComponent.createObject(stack)
+            }
+            return cachedPvZ
         } else if (appId === "files") {
             if (!cachedFileManager || !cachedFileManager.parent) {
                 cachedFileManager = fileManagerComponent.createObject(stack)
@@ -132,6 +138,10 @@ ApplicationWindow {
 
     function closeForegroundApp() {
         var appId = stack.currentItem ? stack.currentItem.objectName : ""
+        if (appId === "pvz") {
+            stack.currentItem.prepareExit()
+            cachedPvZ = null
+        }
         if (stack.depth > 1) stack.pop()
         if (appId.length) systemBackend.endForegroundApp(appId)
     }
@@ -162,6 +172,7 @@ ApplicationWindow {
 
         // App-level Keep Screen On / Wake Lock Check
         var currentAppId = stack.currentItem ? stack.currentItem.objectName : ""
+        if (currentAppId === "pvz") return
         if (systemBackend.wakeLockActive || (currentAppId.length > 0 && systemBackend.isAppKeepScreenOn(currentAppId))) {
             return
         }
@@ -277,6 +288,7 @@ ApplicationWindow {
         ListElement { appId: "reaction-game"; appTitle: "喵喵反应"; iconSource: "qrc:/assets/icons/zap-white.svg"; accent: "#F59E0B" }
         ListElement { appId: "touch-test"; appTitle: "点击测试"; iconSource: "qrc:/assets/icons/mouse-pointer-click.svg"; accent: "#FF4D6D" }
         ListElement { appId: "files"; appTitle: "文件"; iconSource: "qrc:/assets/icons/folder.svg"; accent: "#3B82F6" }
+        ListElement { appId: "pvz"; appTitle: "植物大战僵尸"; iconSource: "qrc:/assets/icons/pvz.svg"; accent: "#318C45" }
         ListElement { appId: "settings"; appTitle: "设置"; iconSource: "qrc:/assets/icons/settings.svg"; accent: "#8B5CF6" }
         ListElement { appId: "mindustry"; appTitle: "像素工厂"; iconSource: "qrc:/assets/icons/mindustry.png"; accent: "#59616A" }
     }
@@ -358,7 +370,8 @@ ApplicationWindow {
             }
 
             Component.onCompleted: {
-                if (window.startInSettings) openApp("settings", true)
+                if (Qt.application.arguments.indexOf("--pvz") >= 0) openApp("pvz", true)
+                else if (window.startInSettings) openApp("settings", true)
                 else if (window.startInFiles) openApp("files", true)
                 else if (window.startInMindustry) window.launchMindustryDirect()
             }
@@ -537,6 +550,14 @@ ApplicationWindow {
         id: reactionGameComponent
         ReactionGameApp {
             objectName: "reaction-game"
+            onExitRequested: window.closeForegroundApp()
+            onBackRequested: window.closeForegroundApp()
+        }
+    }
+
+    Component {
+        id: pvzComponent
+        PvZApp {
             onExitRequested: window.closeForegroundApp()
             onBackRequested: window.closeForegroundApp()
         }

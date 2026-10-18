@@ -35,8 +35,10 @@ Rectangle {
     // Grid Dimensions: 5 Rows x 9 Columns
     readonly property int gridRows: 5
     readonly property int gridCols: 9
-    readonly property int cellWidth: 92
-    readonly property int cellHeight: 96
+    readonly property real cellWidth: (lawnArea.width - 84) / gridCols
+    readonly property real cellHeight: (lawnArea.height - 36) / gridRows
+    readonly property real fieldWidth: cellWidth * gridCols
+    property bool leaving: false
 
     // Battlefield State Models
     // gridPlants: Array of { row, col, type, hp, maxHp, timer, state, digestTimer }
@@ -47,6 +49,33 @@ Rectangle {
     property var projectilesList: []
     // suns: Array of { id, x, y, targetY, value, isFalling, opacity }
     property var sunsList: []
+    ListModel { id: sunVisuals }
+    onSunsListChanged: syncSunVisuals()
+
+    function syncSunVisuals() {
+        var live = {}
+        for (var i = 0; i < sunsList.length; ++i) live[String(sunsList[i].id)] = sunsList[i]
+        for (var j = sunVisuals.count - 1; j >= 0; --j) {
+            if (!live[String(sunVisuals.get(j).sunId)]) sunVisuals.remove(j)
+        }
+        for (var k = 0; k < sunsList.length; ++k) {
+            var sunItem = sunsList[k]
+            var roles = {sunId: sunItem.id, posX: sunItem.x, posY: sunItem.y,
+                         alpha: sunItem.opacity}
+            var found = -1
+            for (var m = 0; m < sunVisuals.count; ++m) {
+                if (sunVisuals.get(m).sunId === sunItem.id) { found = m; break }
+            }
+            if (found >= 0) sunVisuals.set(found, roles)
+            else sunVisuals.append(roles)
+        }
+    }
+
+    function collectSunById(sunId) {
+        for (var i = 0; i < sunsList.length; ++i) {
+            if (sunsList[i].id === sunId) { collectSun(i); return }
+        }
+    }
     // lawnMowers: Array of 5 booleans (row 0 to 4)
     property var lawnMowers: [true, true, true, true, true]
     // mowerPositions: Array of x coordinates for running mowers (-1: idle on left)
@@ -72,6 +101,10 @@ Rectangle {
         if (!systemBackend) return
         var saveData = {
             hasSave: gameRunning && !gameOver && !gameWon,
+            version: 1,
+            cardCooldowns: cardCooldowns,
+            projectilesList: projectilesList,
+            sunsList: sunsList,
             sun: sun,
             score: score,
             level: level,
@@ -96,13 +129,19 @@ Rectangle {
         if (!jsonStr || jsonStr.length < 10) return false
         try {
             var data = JSON.parse(jsonStr)
-            if (data && data.hasSave) {
-                sun = data.sun || 150
+            if (data && data.hasSave && data.version === 1
+                    && Array.isArray(data.gridPlants) && Array.isArray(data.zombiesList)
+                    && typeof data.sun === "number" && data.sun >= 0) {
+                sun = data.sun
                 score = data.score || 0
                 level = data.level || 1
                 wave = data.wave || 1
                 maxWaves = data.maxWaves || 3
                 waveProgress = data.waveProgress || 0
+                cardCooldowns = data.cardCooldowns || [0,0,0,0,0,0,0,0]
+                projectilesList = data.projectilesList || []
+                sunsList = data.sunsList || []
+                gamePaused = false
                 gridPlants = data.gridPlants || []
                 zombiesList = data.zombiesList || []
                 lawnMowers = data.lawnMowers || [true, true, true, true, true]
@@ -110,9 +149,6 @@ Rectangle {
                 gameRunning = true
                 gameOver = false
                 gameWon = false
-                gameLoopTimer.restart()
-                sunDropTimer.restart()
-                zombieWaveTimer.restart()
                 showToast("✨ 已恢复上次战斗进度")
                 return true
             }
@@ -163,19 +199,24 @@ Rectangle {
         gamePaused = false
         gameRunning = true
 
-        gameLoopTimer.restart()
-        sunDropTimer.restart()
-        zombieWaveTimer.restart()
         showToast("🌻 关卡 " + level + " 开始！守卫草坪！")
     }
 
-    function exitGame() {
+    function prepareExit() {
+        if (leaving) return
         saveGame()
+        leaving = true
         gameRunning = false
-        gameLoopTimer.stop()
-        sunDropTimer.stop()
-        zombieWaveTimer.stop()
+    }
+
+    function exitGame() {
+        prepareExit()
         exitRequested()
+    }
+
+    StackView.onRemoved: {
+        prepareExit()
+        destroy()
     }
 
     Component.onCompleted: {
@@ -186,7 +227,7 @@ Rectangle {
     }
 
     Component.onDestruction: {
-        saveGame()
+        if (!leaving) saveGame()
     }
 
     // --- Touch / Planting Interaction ---
@@ -214,7 +255,7 @@ Rectangle {
     }
 
     function handleTileClick(r, c) {
-        if (!gameRunning || gamePaused) return
+        if (!gameRunning || gamePaused || r < 0 || r >= gridRows || c < 0 || c >= gridCols) return
 
         // 1. Shovel mode: dig up plant
         if (shovelMode) {
@@ -286,7 +327,8 @@ Rectangle {
             id: Date.now() + Math.random(),
             x: x,
             y: y,
-            targetY: Math.min(y + 120, lawnArea.height - 70),
+            targetY: Math.min(y + 120, gridRows * cellHeight - 52),
+            lifetime: 14,
             val: val || 25,
             isFalling: true,
             opacity: 1.0
@@ -297,7 +339,7 @@ Rectangle {
     }
 
     function collectSun(idx) {
-        if (idx < 0 || idx >= sunsList.length) return
+        if (!gameRunning || gamePaused || idx < 0 || idx >= sunsList.length) return
         var s = sunsList[idx]
         sun += s.val
         createFloatText(s.x, s.y, "+" + s.val, "#F59E0B")
@@ -309,14 +351,15 @@ Rectangle {
     // --- Main Game Engine Tick (60 FPS / 16ms) ---
     Timer {
         id: gameLoopTimer
-        interval: 16
+        interval: 33
         repeat: true
-        running: pvzPage.gameRunning && !pvzPage.gamePaused
+        running: pvzPage.gameRunning && !pvzPage.gamePaused && pvzPage.visible && !pvzPage.leaving
         onTriggered: pvzPage.updateGameEngine()
     }
 
     function updateGameEngine() {
-        var dt = 0.016 * gameSpeed
+        if (!gameRunning || gamePaused || leaving) return
+        var dt = 0.033 * gameSpeed
 
         // 1. Update Card Cooldowns
         var cds = cardCooldowns.slice()
@@ -451,7 +494,7 @@ Rectangle {
             }
 
             // Remove if hit or out of screen
-            if (!hitZombie && bullet.x < lawnArea.width) {
+            if (!hitZombie && bullet.x < fieldWidth + 65) {
                 updatedProj.push(bullet)
             }
         }
@@ -475,7 +518,7 @@ Rectangle {
                 if (mineIdx >= 0 && gridPlants[mineIdx].type === "potatomine" && gridPlants[mineIdx].state === "armed") {
                     // BOOM!
                     createFloatText(zom.x, zom.row * cellHeight + 10, "💥 BOOM!", "#EF4444")
-                    damageZombie(z, 1800, false)
+                    score += (zom.type === "buckethead" ? 50 : (zom.type === "conehead" ? 30 : 20))
                     // Remove mine
                     var gPlants = gridPlants.slice()
                     gPlants.splice(mineIdx, 1)
@@ -533,12 +576,12 @@ Rectangle {
             if (mPositions[mr] >= 0) {
                 mPositions[mr] += 750 * dt // Fast charge across lane
                 // Kill any zombies in lane touched by mower
-                for (var zi = 0; zi < zombiesList.length; zi++) {
+                for (var zi = zombiesList.length - 1; zi >= 0; zi--) {
                     if (zombiesList[zi].row === mr && zombiesList[zi].x <= mPositions[mr] + 40) {
                         damageZombie(zi, 9999, false)
                     }
                 }
-                if (mPositions[mr] > lawnArea.width + 100) {
+                if (mPositions[mr] > fieldWidth + 100) {
                     mPositions[mr] = -99 // Offscreen finished
                     mMowers[mr] = false
                 }
@@ -557,7 +600,8 @@ Rectangle {
                     sunItem.isFalling = false
                 }
             }
-            updatedSuns.push(sunItem)
+            sunItem.lifetime = (sunItem.lifetime === undefined ? 14 : sunItem.lifetime) - dt
+            if (sunItem.lifetime > 0) updatedSuns.push(sunItem)
         }
         sunsList = updatedSuns
 
@@ -615,7 +659,10 @@ Rectangle {
 
     function startLawnMower(row) {
         var mPositions = mowerPositions.slice()
-        if (mPositions[row] < 0) {
+        if (lawnMowers[row] && mPositions[row] === -1) {
+            var available = lawnMowers.slice()
+            available[row] = false
+            lawnMowers = available
             mPositions[row] = 0
             mowerPositions = mPositions
             createFloatText(40, row * cellHeight + 20, "除草机启动！", "#10B981")
@@ -639,11 +686,11 @@ Rectangle {
     // --- Natural Sun Drop Spawner ---
     Timer {
         id: sunDropTimer
-        interval: 9000
+        interval: 9000 / pvzPage.gameSpeed
         repeat: true
-        running: pvzPage.gameRunning && !pvzPage.gamePaused
+        running: pvzPage.gameRunning && !pvzPage.gamePaused && pvzPage.visible && !pvzPage.leaving
         onTriggered: {
-            var dropX = 80 + Math.random() * (lawnArea.width - 200)
+            var dropX = 20 + Math.random() * (pvzPage.fieldWidth - 70)
             pvzPage.spawnSun(dropX, 10, 25)
         }
     }
@@ -651,13 +698,14 @@ Rectangle {
     // --- Zombie Wave Spawner ---
     Timer {
         id: zombieWaveTimer
-        interval: 7000
+        interval: 7000 / pvzPage.gameSpeed
         repeat: true
-        running: pvzPage.gameRunning && !pvzPage.gamePaused
+        running: pvzPage.gameRunning && !pvzPage.gamePaused && pvzPage.visible && !pvzPage.leaving
         onTriggered: pvzPage.spawnNextZombie()
     }
 
     function spawnNextZombie() {
+        if (wave >= maxWaves && waveProgress >= 1) return
         waveProgress = Math.min(1.0, waveProgress + 0.15)
         if (waveProgress >= 1.0 && wave < maxWaves) {
             wave++
@@ -693,7 +741,7 @@ Rectangle {
         var newZombie = {
             id: Date.now() + Math.random(),
             row: r,
-            x: lawnArea.width + 10 + Math.random() * 40,
+            x: fieldWidth + 10 + Math.random() * 40,
             type: type,
             icon: icon,
             hp: baseHp,
@@ -720,7 +768,7 @@ Rectangle {
     Timer {
         interval: 50
         repeat: true
-        running: pvzPage.floatTexts.length > 0
+        running: pvzPage.floatTexts.length > 0 && pvzPage.visible && !pvzPage.gamePaused && !pvzPage.leaving
         onTriggered: {
             var updated = []
             for (var i = 0; i < pvzPage.floatTexts.length; i++) {
@@ -741,9 +789,12 @@ Rectangle {
     AppHeader {
         id: appHeader
         title: "植物大战僵尸"
-        subtitle: "第 " + pvzPage.level + " 关 · 波次 " + pvzPage.wave + "/" + pvzPage.maxWaves
-        showBack: false
-        trailingText: "得分 " + pvzPage.score
+        subtitle: "选植物，再点草坪种植 · 点阳光收集 · 得分 " + pvzPage.score
+        showBack: true
+        onBackRequested: pvzPage.exitGame()
+        trailingText: "重新开始"
+        trailingEnabled: true
+        onTrailingRequested: pvzPage.startNewGame(pvzPage.level)
         onExitRequested: pvzPage.exitGame()
     }
 
@@ -790,7 +841,7 @@ Rectangle {
 
                             Column {
                                 anchors.centerIn: parent; spacing: 2
-                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.icon; font.pixelSize: 22 }
+                                Image { anchors.horizontalCenter: parent.horizontalCenter; source: Qt.resolvedUrl("../../assets/icons/pvz-" + modelData.id + ".svg"); width: 32; height: 32; sourceSize.width: 64; sourceSize.height: 64 }
                                 Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.name; color: "#E2E8F0"; font.family: window.uiFont; font.pixelSize: 11; font.weight: Font.DemiBold }
                                 Rectangle {
                                     anchors.horizontalCenter: parent.horizontalCenter
@@ -836,7 +887,7 @@ Rectangle {
                         Row {
                             anchors.centerIn: parent; spacing: 4
                             Text { text: "💾"; font.pixelSize: 12 }
-                            Text { text: "自动存档中"; color: "#A7F3D0"; font.family: window.uiFont; font.pixelSize: 11; font.weight: Font.DemiBold }
+                            Text { text: "退出自动保存"; color: "#A7F3D0"; font.family: window.uiFont; font.pixelSize: 11; font.weight: Font.DemiBold }
                         }
                     }
                     RowLayout {
@@ -848,7 +899,7 @@ Rectangle {
                             MouseArea { anchors.fill: parent; onClicked: pvzPage.gameSpeed = pvzPage.gameSpeed > 1 ? 1.0 : 2.0 }
                         }
                         Rectangle {
-                            Layout.preferredWidth: 32; Layout.preferredHeight: 26; radius: 6
+                            Layout.preferredWidth: 48; Layout.preferredHeight: 32; radius: 6
                             color: "#334155"
                             Text { anchors.centerIn: parent; text: pvzPage.gamePaused ? "▶" : "⏸"; color: "white"; font.pixelSize: 12 }
                             MouseArea { anchors.fill: parent; onClicked: pvzPage.gamePaused = !pvzPage.gamePaused }
@@ -870,7 +921,7 @@ Rectangle {
                 anchors.left: parent.left; anchors.leftMargin: 64
                 anchors.top: parent.top; anchors.topMargin: 12
                 rows: pvzPage.gridRows; columns: pvzPage.gridCols
-                spacing: 2
+                spacing: 0
 
                 Repeater {
                     model: pvzPage.gridRows * pvzPage.gridCols
@@ -899,7 +950,7 @@ Rectangle {
                     readonly property int mowerRow: index
                     readonly property double posX: pvzPage.mowerPositions[mowerRow] >= 0 ? (64 + pvzPage.mowerPositions[mowerRow]) : 12
                     visible: pvzPage.lawnMowers[mowerRow] || pvzPage.mowerPositions[mowerRow] >= 0
-                    x: posX; y: 12 + mowerRow * (pvzPage.cellHeight + 2) + 22
+                    x: posX; y: 12 + mowerRow * pvzPage.cellHeight + 22
                     width: 48; height: 52; radius: 12
                     color: "#DC2626"; border.color: "#F87171"; border.width: 2
                     Column {
@@ -912,19 +963,20 @@ Rectangle {
 
             // Plants Layer
             Repeater {
-                model: pvzPage.gridPlants
+                model: pvzPage.gridPlants.length
                 delegate: Item {
-                    x: 64 + modelData.col * (pvzPage.cellWidth + 2)
-                    y: 12 + modelData.row * (pvzPage.cellHeight + 2)
+                    readonly property var modelData: pvzPage.gridPlants[index]
+                    x: 64 + modelData.col * pvzPage.cellWidth
+                    y: 12 + modelData.row * pvzPage.cellHeight
                     width: pvzPage.cellWidth; height: pvzPage.cellHeight
 
                     // Plant Avatar
                     Column {
                         anchors.centerIn: parent; spacing: 1
-                        Text {
+                        Image {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.icon
-                            font.pixelSize: modelData.type === "wallnut" ? 36 : 30
+                            source: Qt.resolvedUrl("../../assets/icons/pvz-" + modelData.type + ".svg")
+                            width: 60; height: 60; sourceSize.width: 120; sourceSize.height: 120
                             scale: modelData.type === "cherrybomb" ? (1.0 + modelData.fuseTimer * 0.5) : 1.0
                         }
                         Text {
@@ -949,8 +1001,9 @@ Rectangle {
 
             // Projectiles Layer
             Repeater {
-                model: pvzPage.projectilesList
+                model: pvzPage.projectilesList.length
                 delegate: Rectangle {
+                    readonly property var modelData: pvzPage.projectilesList[index]
                     x: 64 + modelData.x; y: 12 + modelData.y
                     width: 18; height: 18; radius: 9
                     color: modelData.type === "snow" ? "#38BDF8" : "#4ADE80"
@@ -960,19 +1013,20 @@ Rectangle {
 
             // Zombies Layer
             Repeater {
-                model: pvzPage.zombiesList
+                model: pvzPage.zombiesList.length
                 delegate: Item {
+                    readonly property var modelData: pvzPage.zombiesList[index]
                     x: 64 + modelData.x
-                    y: 12 + modelData.row * (pvzPage.cellHeight + 2) + 6
+                    y: 12 + modelData.row * pvzPage.cellHeight + 6
                     width: 60; height: pvzPage.cellHeight - 12
 
                     // Zombie Avatar & Armor
                     Column {
                         anchors.centerIn: parent; spacing: 1
-                        Text {
+                        Image {
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: modelData.icon
-                            font.pixelSize: 34
+                            source: Qt.resolvedUrl("../../assets/icons/pvz-zombie-" + modelData.type + ".svg")
+                            width: 62; height: 70; sourceSize.width: 124; sourceSize.height: 140
                             opacity: modelData.isFrozen ? 0.75 : 1.0
                         }
                         // Health Bar
@@ -991,26 +1045,28 @@ Rectangle {
 
             // Natural & Generated Suns Layer
             Repeater {
-                model: pvzPage.sunsList
+                model: sunVisuals
                 delegate: Rectangle {
-                    x: 64 + modelData.x; y: 12 + modelData.y
+                    objectName: "pvz-sun-" + model.sunId
+                    x: 64 + model.posX; y: 12 + model.posY
                     width: 52; height: 52; radius: 26
                     color: "#FBBF24"; border.color: "#FEF08A"; border.width: 3
-                    opacity: modelData.opacity
+                    opacity: model.alpha
 
                     Text { anchors.centerIn: parent; text: "☀️"; font.pixelSize: 28 }
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: pvzPage.collectSun(index)
+                        onClicked: pvzPage.collectSunById(model.sunId)
                     }
                 }
             }
 
             // Floating Text Particles
             Repeater {
-                model: pvzPage.floatTexts
+                model: pvzPage.floatTexts.length
                 delegate: Text {
+                    readonly property var modelData: pvzPage.floatTexts[index]
                     x: 64 + modelData.x; y: 12 + modelData.y
                     text: modelData.text
                     color: modelData.color
@@ -1039,6 +1095,15 @@ Rectangle {
                 }
             }
         }
+    }
+
+    Rectangle {
+        anchors.centerIn: parent
+        width: 340; height: 90; radius: 20
+        visible: pvzPage.gamePaused && pvzPage.gameRunning
+        color: "#EE0F172A"; border.color: "#94A3B8"; z: 600
+        Text { anchors.centerIn: parent; text: "已暂停 · 点这里继续"; color: "white"; font.pixelSize: 24; font.family: window.uiFont }
+        MouseArea { anchors.fill: parent; onClicked: pvzPage.gamePaused = false }
     }
 
     // 3. Floating Toast Banner

@@ -20,6 +20,7 @@ pass scheduler
 grep -q 'beginForegroundApp' qml/Main.qml
 grep -q 'endForegroundApp' qml/Main.qml
 test "$(grep -c 'StackView.destroyOnPop = true' qml/Main.qml)" -eq 3
+grep -q 'StackView.onRemoved' qml/apps/PvZApp.qml
 grep -q 'cachedSettings.StackView.destroyOnPop = false' qml/Main.qml
 grep -q '^Conflicts=meow-os.service' systemd/meow-mindustry.service
 pass foreground-session
