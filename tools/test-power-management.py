@@ -6,6 +6,126 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 tempfile.tempdir=str(Path(__file__).resolve().parents[1] / 'tmp')
 
 class HardwareTests(unittest.TestCase):
+    def test_restore_failure_reports_protection_message(self):
+        import json
+        from unittest.mock import patch
+        from meow_power.daemon import main
+        from meow_power.policy import Policy
+        from meow_power.hardware import CpuLimiter
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            cpu=root/'devices/system/cpu/cpufreq/policy0'
+            cpu.mkdir(parents=True)
+            maximum=cpu/'scaling_max_freq'
+            maximum.write_text('1800000')
+            limiter=CpuLimiter(root,root/'limits.json','boot')
+            limiter.limit(1008000)
+            limiter.throttled=True
+            limiter.save()
+            maximum.unlink()
+            (root/'boot').write_text('boot')
+            (root/'uptime').write_text('30 0')
+            policy=Policy()
+            policy.since['cool']=0
+            args=['--once','--config',str(root/'no-config'),'--state-file',str(root/'state.json'),
+                  '--policy-state',str(root/'limits.json'),'--sysfs-root',str(root),
+                  '--boot-id-file',str(root/'boot'),'--uptime-file',str(root/'uptime'),
+                  '--i2c-device',str(root/'no-i2c'),'--sleep-marker',str(root/'sleeping')]
+            with patch('meow_power.daemon.Policy',return_value=policy), patch('meow_power.daemon.board_temperature',return_value=(40,'cpu',[])), patch('sys.stderr'):
+                self.assertEqual(main(args),0)
+            state=json.loads((root/'state.json').read_text(encoding='utf-8'))
+            self.assertEqual(state['powerManagement']['status'],'throttled')
+            self.assertIn('失败',state['powerManagement']['message'])
+
+    def test_fake_time_sleep_wake_hot_and_recover_while_asleep(self):
+        from meow_power.hardware import CpuLimiter
+        from meow_power.policy import Policy
+        from meow_power.daemon import enforce_cpu
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            cpu=root/'devices/system/cpu/cpufreq/policy0'
+            cpu.mkdir(parents=True)
+            maximum=cpu/'scaling_max_freq'
+            maximum.write_text('1800000')
+            limiter=CpuLimiter(root,root/'limits.json','boot')
+            policy=Policy()
+            policy.update(0,80)
+            policy.update(4,80)
+            enforce_cpu(limiter,policy.throttled,True,policy.cap)
+            self.assertEqual(maximum.read_text(),'408000')
+            enforce_cpu(limiter,policy.throttled,False,policy.cap)
+            self.assertEqual(maximum.read_text(),'1008000')
+            policy.update(5,74)
+            policy.update(35,74)
+            enforce_cpu(limiter,policy.throttled,True,policy.cap)
+            self.assertEqual(maximum.read_text(),'408000')
+            enforce_cpu(limiter,policy.throttled,False,policy.cap)
+            self.assertEqual(maximum.read_text(),'1800000')
+
+    def test_cooldown_snapshot_precedes_stop_request(self):
+        import json
+        from unittest.mock import patch
+        from meow_power.daemon import main
+        from meow_power.policy import Policy
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            (root/'boot').write_text('boot')
+            (root/'uptime').write_text('4 0')
+            policy=Policy()
+            policy.update(0,85)
+            def stop():
+                state=json.loads((root/'state.json').read_text(encoding='utf-8'))
+                self.assertEqual(state['powerManagement']['status'],'cooldown')
+                self.assertTrue(state['powerManagement']['events'])
+                return []
+            args=['--once','--config',str(root/'no-config'),'--state-file',str(root/'state.json'),
+                  '--policy-state',str(root/'limits.json'),'--sysfs-root',str(root),
+                  '--boot-id-file',str(root/'boot'),'--uptime-file',str(root/'uptime'),
+                  '--i2c-device',str(root/'no-i2c'),'--sleep-marker',str(root/'sleeping')]
+            with patch('meow_power.daemon.Policy',return_value=policy), patch('meow_power.daemon.board_temperature',return_value=(85,'cpu',[])), patch('meow_power.daemon.stop_games',side_effect=stop) as stopped:
+                self.assertEqual(main(args),0)
+                stopped.assert_called_once()
+
+    def test_sleep_wake_thermal_caps_preserve_original_and_external_lower(self):
+        from meow_power.hardware import CpuLimiter
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            cpu=root/'devices/system/cpu/cpufreq/policy0'
+            cpu.mkdir(parents=True)
+            maximum=cpu/'scaling_max_freq'
+            maximum.write_text('1800000')
+            state=root/'limits.json'
+            limiter=CpuLimiter(root,state,'boot')
+            limiter.limit(408000)
+            restarted=CpuLimiter(root,state,'boot')
+            restarted.limit(1008000)
+            self.assertEqual(maximum.read_text(),'1008000')
+            restarted.limit(408000)
+            maximum.write_text('300000')
+            restarted.limit(1008000)
+            self.assertEqual(maximum.read_text(),'300000')
+            restarted.restore()
+            self.assertEqual(maximum.read_text(),'300000')
+
+    def test_stop_is_one_bounded_nonblocking_request(self):
+        from unittest.mock import patch
+        from meow_power.hardware import stop_games
+        with patch('meow_power.hardware.subprocess.run') as run:
+            run.return_value.returncode=0
+            self.assertEqual(stop_games(),[])
+            run.assert_called_once()
+            self.assertEqual(run.call_args[0][0],['systemctl','--no-block','stop','meow-pvz.service','meow-mindustry.service'])
+            self.assertLessEqual(run.call_args[1]['timeout'],1)
+
+    def test_invalid_configuration_rejected(self):
+        from meow_power.daemon import validate_config
+        for config in ({'sample_interval_seconds':-1},{'throttle_c':float('nan')},
+                       {'warning_c':90,'throttle_c':80},{'hot_hold_seconds':0},
+                       {'throttle_khz':-1},{'recover_c':90},{'warning_c':True}):
+            with self.subTest(config=config):
+                with self.assertRaises(ValueError): validate_config(config)
+        validate_config({})
+
     def test_lower_cap_and_boot_isolation(self):
         from meow_power.hardware import CpuLimiter
         with tempfile.TemporaryDirectory() as directory:
@@ -102,7 +222,9 @@ class PolicyTests(unittest.TestCase):
         p.update(0,80)
         p.update(4,80)
         p.update(5,74)
-        self.assertTrue(p.update(34,None)['limit'])
+        unavailable=p.update(34,None)
+        self.assertTrue(unavailable['limit'])
+        self.assertIn('无法读取',unavailable['message'])
         p.update(35,74)
         self.assertFalse(p.update(64,74)['restore'])
         self.assertTrue(p.update(65,74)['restore'])
@@ -138,6 +260,27 @@ class PolicyTests(unittest.TestCase):
         self.assertFalse(p.update(11, 40, 3400, None)['lowBattery'])
 
 class TelemetryTests(unittest.TestCase):
+    def test_charge_current_table(self):
+        from meow_power.telemetry import sample
+        for charge in range(4):
+            for pg in (False,True):
+                for current in (-100,0,100):
+                    values={6:2981,8:3800,10:0,12:current&65535,16:1445,18:3000,20:0,44:49,46:100,58:0,60:3000}
+                    def read(address,register,length):
+                        if address==0x6b: return {11:0x14,0:0,2:0,8:(charge<<3)|(4 if pg else 0),9:0}[register]
+                        return values[register]
+                    state=sample(read)
+                    conflict=(charge in (1,2) and not pg) or (current>50 and not (pg and charge in (1,2))) or (current < -50 and pg and charge in (1,2))
+                    with self.subTest(charge=charge,pg=pg,current=current):
+                        self.assertEqual(state['batteryStatus']=='Unknown',conflict)
+        def read_fault(address,register,length):
+            if address==0x6b: return {11:0x14,0:0,2:0,8:4,9:0x35}[register]
+            return {6:2981,8:3800,10:0,12:0,16:1445,18:3000,20:0,44:49,46:100,58:0,60:3000}[register]
+        state=sample(read_fault)
+        self.assertEqual(state['chargeTemperatureZone'],'Cold')
+        self.assertEqual(state['powerManagement']['chargerChargeFault'],'safety-timer')
+        self.assertIn('充电',state['gaugeError'])
+
     def test_conflict_invalid_capacity_and_fault_retained(self):
         from meow_power.telemetry import sample
         values={6:2981,8:3800,10:0,12:65436,16:1445,18:0,20:65436,44:49,46:100,58:0,60:65535}

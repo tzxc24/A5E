@@ -23,18 +23,25 @@ def sample(read):
     status_byte=charger.get(8)
     external_known=status_byte is not None
     external=external_known and bool(status_byte & 4)
-    charging=external and ((status_byte >> 3) & 3) in (1,2)
-    conflict=current_valid and ((charging and current < -50) or (not external and external_known and current > 50))
+    charge_state=((status_byte >> 3) & 3) if external_known else None
+    charging=external and charge_state in (1,2)
+    conflict=(external_known and charge_state in (1,2) and not external) or (current_valid and external_known and
+              ((charging and current < -50) or (not charging and current > 50)))
     if conflict: errors.append('充电器状态与电流冲突')
     status='Unknown'
     if current_valid and external_known and not conflict:
         status='Charging' if charging else 'Discharging' if current < -50 else 'Full' if ((status_byte >> 3)&3)==3 else 'Not charging'
     temp=gauge[6]
     temp_c=temp/10.0-273.15 if temp is not None and 2331 <= temp <= 3731 else -273.15
+    fault=charger.get(9)
+    charge_fault=('normal','input-fault','thermal-shutdown','safety-timer')[(fault >> 4)&3] if fault is not None else 'unknown'
+    zone={0:'Normal',2:'Warm',3:'Cool',5:'Cold',6:'Hot'}.get(fault&7,'Unknown') if fault is not None else 'Unknown'
+    if fault:
+        errors.append('充电器故障 REG09=0x%02x，充电故障=%s，NTC=%s' % (fault,charge_fault,zone))
     return dict(batteryAvailable=voltage>=0, gaugeCommunication=gauge[6] is not None,
         gaugeError='; '.join(errors), batteryPercent=soc, batteryStatus=status,
         batteryCharging=status=='Charging', chargerAvailable=bool(charger),
-        externalPowerPresent=external, batteryTemperatureC=temp_c, chargeTemperatureZone='Unknown',
+        externalPowerPresent=external, batteryTemperatureC=temp_c, chargeTemperatureZone=zone,
         batteryVoltageMv=voltage, batteryCurrentMa=current if current_valid else 0,
         batteryRawVoltageMv=gauge[8] if gauge[8] is not None else -1,
         batteryRawCurrentMa=current if current is not None else 0,
@@ -44,7 +51,8 @@ def sample(read):
         chargerFastCurrentMa=(charger[2]&63)*60 if charger.get(2) is not None else -1,
         chargerFault=charger.get(9),
         powerManagement=dict(socConfidence=confidence,currentValid=current_valid,
-            voltageValid=voltage>=0, externalPowerKnown=external_known and not conflict))
+            voltageValid=voltage>=0, externalPowerKnown=external_known and not conflict,
+            chargerChargeFault=charge_fault,chargerNtcZone=zone,chargerFaultRaw=fault))
 
 class I2CReader:
     """Only combined register-address/read transfers; never writes register values."""

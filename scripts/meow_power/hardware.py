@@ -27,15 +27,17 @@ class CpuLimiter:
         self.sysfs,self.path,self.boot=Path(sysfs),Path(state_path),boot
         self.records={}
         self.cooldown=False
+        self.throttled=False
         if self.path.exists():
             if not root_owned(self.path): raise ValueError('CPU 状态文件必须由 root 所有且不可由其他用户写入')
             state=json.loads(self.path.read_text(encoding='utf-8'))
             if state.get('bootId') == boot:
                 self.records=state.get('limits',{})
                 self.cooldown=bool(state.get('cooldown',False))
+                self.throttled=bool(state.get('throttled',bool(self.records)))
 
     def save(self):
-        atomic_json(self.path,dict(bootId=self.boot,limits=self.records,cooldown=self.cooldown),0o600)
+        atomic_json(self.path,dict(bootId=self.boot,limits=self.records,cooldown=self.cooldown,throttled=self.throttled),0o600)
 
     def limit(self, cap):
         errors=[]
@@ -43,11 +45,22 @@ class CpuLimiter:
             try:
                 current=int(path.read_text().strip())
                 key=str(path)
+                record=self.records.get(key)
+                if record and current not in (record['applied'],record.get('pending')):
+                    # Another manager changed its limit: relinquish our baseline.
+                    del self.records[key]
+                    self.save()
                 if key not in self.records and current > cap:
-                    self.records[key]=dict(original=current,applied=cap)
-                    self.save()  # Persist before changing the hardware.
-                if key in self.records and current > cap:
-                    path.write_text(str(cap))
+                    self.records[key]=dict(original=current,applied=current)
+                if key in self.records:
+                    record=self.records[key]
+                    target=min(cap,record['original'])
+                    record['pending']=target
+                    self.save()  # Journal ownership before changing hardware.
+                    if current != target: path.write_text(str(target))
+                    record['applied']=target
+                    record.pop('pending',None)
+                    self.save()
             except (OSError,ValueError) as exc: errors.append('限制 CPU 失败: %s' % exc)
         return errors
 
@@ -59,7 +72,7 @@ class CpuLimiter:
                 # Never trust an arbitrary path from a persisted document.
                 if path not in list(self.sysfs.glob('devices/system/cpu/cpufreq/policy*/scaling_max_freq')):
                     raise ValueError('CPU 状态路径无效')
-                if int(path.read_text().strip()) == record['applied']:
+                if int(path.read_text().strip()) in (record['applied'],record.get('pending')):
                     path.write_text(str(record['original']))
                 del self.records[key]
                 self.save()
@@ -82,10 +95,8 @@ def board_temperature(sysfs):
     return (max(readings) if readings and not errors else None), ', '.join(sources), errors
 
 def stop_games():
-    errors=[]
-    for unit in ('meow-pvz.service','meow-mindustry.service'):
-        try:
-            result=subprocess.run(['systemctl','stop',unit],capture_output=True,text=True,timeout=15)
-            if result.returncode: errors.append('停止 %s 失败: %s' % (unit,result.stderr.strip()))
-        except (OSError,subprocess.TimeoutExpired) as exc: errors.append('停止 %s 失败: %s' % (unit,exc))
-    return errors
+    try:
+        result=subprocess.run(['systemctl','--no-block','stop','meow-pvz.service','meow-mindustry.service'],
+                              capture_output=True,text=True,timeout=1)
+        return ['停止游戏请求失败: %s' % result.stderr.strip()] if result.returncode else []
+    except (OSError,subprocess.TimeoutExpired) as exc: return ['停止游戏请求失败: %s' % exc]

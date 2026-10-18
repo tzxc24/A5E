@@ -35,5 +35,7 @@ class Policy:
         messages = {'normal':'电源监控正常', 'warm':'设备温度偏高，请注意散热',
                     'throttled':'设备过热，已请求限制 CPU 频率', 'cooldown':'过热已停止游戏，请等待设备冷却',
                     'sensor-error':'无法读取板载温度，保护状态未解除'}
+        if not known:
+            messages[status]='无法读取板载温度，保护状态未解除；' + messages[status]
         return dict(status=status, message=messages[status], stopGames=stop_games,
                     limit=self.throttled, restore=restore, lowBattery=low)
